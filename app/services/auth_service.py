@@ -1,0 +1,119 @@
+from datetime import datetime
+from typing import Optional, Tuple
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+from app.models.user import User
+from app.core.security import (
+    verify_password, 
+    create_access_token, 
+    create_refresh_token,
+    get_password_hash
+)
+from app.schemas.user import UserCreate
+
+
+class AuthService:
+    
+    @staticmethod
+    async def authenticate_user(
+        db: AsyncSession, 
+        username: str, 
+        password: str
+    ) -> Optional[User]:
+        """验证用户凭据"""
+        result = await db.execute(
+            select(User).where(
+                (User.username == username) | (User.email == username)
+            )
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            return None
+        
+        if not verify_password(password, user.hashed_password):
+            return None
+        
+        # 更新最后登录时间
+        user.last_login = datetime.utcnow()
+        await db.commit()
+        
+        return user
+    
+    @staticmethod
+    async def register_user(
+        db: AsyncSession, 
+        user_data: UserCreate
+    ) -> Tuple[User, str, str]:
+        """注册用户并返回令牌"""
+        # 检查用户名是否已存在
+        result = await db.execute(
+            select(User).where(User.username == user_data.username)
+        )
+        if result.scalar_one_or_none():
+            raise ValueError("用户名已存在")
+        
+        # 检查邮箱是否已存在
+        result = await db.execute(
+            select(User).where(User.email == user_data.email)
+        )
+        if result.scalar_one_or_none():
+            raise ValueError("邮箱已存在")
+        
+        # 创建用户
+        user = User(
+            username=user_data.username,
+            email=user_data.email,
+            hashed_password=get_password_hash(user_data.password),
+            display_name=user_data.display_name
+        )
+        
+        db.add(user)
+        await db.flush()
+        
+        # 生成令牌
+        access_token = create_access_token(data={"sub": str(user.id)})
+        refresh_token = create_refresh_token(data={"sub": str(user.id)})
+        
+        await db.commit()
+        await db.refresh(user)
+        
+        return user, access_token, refresh_token
+    
+    @staticmethod
+    async def login_user(
+        db: AsyncSession, 
+        username: str, 
+        password: str
+    ) -> Tuple[User, str, str]:
+        """用户登录"""
+        user = await AuthService.authenticate_user(db, username, password)
+        if not user:
+            raise ValueError("用户名或密码错误")
+        
+        if not user.is_active:
+            raise ValueError("用户已被禁用")
+        
+        access_token = create_access_token(data={"sub": str(user.id)})
+        refresh_token = create_refresh_token(data={"sub": str(user.id)})
+        
+        return user, access_token, refresh_token
+    
+    @staticmethod
+    def refresh_access_token(refresh_token: str) -> str:
+        """使用刷新令牌获取新的访问令牌"""
+        from app.core.security import decode_token
+        
+        payload = decode_token(refresh_token)
+        if not payload:
+            raise ValueError("无效的刷新令牌")
+        
+        if payload.get("type") != "refresh":
+            raise ValueError("无效的令牌类型")
+        
+        user_id = payload.get("sub")
+        if not user_id:
+            raise ValueError("无效的令牌")
+        
+        return create_access_token(data={"sub": user_id})

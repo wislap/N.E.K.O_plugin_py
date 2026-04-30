@@ -1,0 +1,493 @@
+{
+  "plugins": [
+    {
+      "id": "neko-game-helper",
+      "name": "Neko Game Helper",
+      "description": "为 N.E.K.O. 提供游戏辅助功能，支持多种热门游戏的实时数据查询和攻略提示",
+      "version": "2.3.1",
+      "author": {
+        "name": "NekoDev",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=neko",
+        "github": "https://github.com/NekoDev"
+      },
+      "githubRepo": "https://github.com/NekoDev/neko-game-helper",
+      "zone": "game",
+      "tags": ["游戏", "查询", "攻略", "辅助"],
+      "downloads": 15420,
+      "likes": 328,
+      "aiRating": {
+        "functionality": "S",
+        "security": "A",
+        "documentation": "A",
+        "ratedAt": "2026-03-25"
+      },
+      "adminRating": {
+        "functionality": "A",
+        "security": "A",
+        "documentation": "B",
+        "ratedAt": "2026-03-26"
+      },
+      "readme": "# Neko Game Helper\n\n为 N.E.K.O. 提供游戏辅助功能的插件。\n\n## 功能特性\n\n- 支持原神、崩坏：星穹铁道、绝区零等热门游戏\n- 实时查询角色数据、武器信息\n- 提供深渊攻略和配队建议\n- 自动识别游戏截图中的内容\n\n## 安装\n\n```bash\nnpm install neko-game-helper\n```\n\n## 使用方法\n\n```python\nfrom neko_plugin import GameHelper\n\nhelper = GameHelper()\nawait helper.query_character(\"胡桃\")\n```\n\n## 配置\n\n在 `config.json` 中配置你的游戏账号信息。\n\n## 许可证\n\nMIT License",
+      "createdAt": "2025-08-15",
+      "updatedAt": "2026-03-20",
+      "isRecommended": true
+    },
+    {
+      "id": "neko-companion-plus",
+      "name": "Neko Companion Plus",
+      "description": "增强 N.E.K.O. 的陪伴体验，提供更多互动方式和情感表达",
+      "version": "1.5.0",
+      "author": {
+        "name": "CatLover",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=cat",
+        "github": "https://github.com/CatLover"
+      },
+      "githubRepo": "https://github.com/CatLover/neko-companion-plus",
+      "zone": "companion",
+      "tags": ["陪玩", "互动", "情感", "增强"],
+      "downloads": 23150,
+      "likes": 512,
+      "aiRating": {
+        "functionality": "A",
+        "security": "S",
+        "documentation": "A",
+        "ratedAt": "2026-03-28"
+      },
+      "adminRating": {
+        "functionality": "S",
+        "security": "S",
+        "documentation": "A",
+        "ratedAt": "2026-03-29"
+      },
+      "readme": "# Neko Companion Plus\n\n增强 N.E.K.O. 的陪伴体验插件。\n\n## 功能特性\n\n- 更多情感表达方式\n- 自定义互动动作\n- 语音情绪识别\n- 智能提醒功能\n- 节日特别互动\n\n## 安装方法\n\n1. 下载最新版本\n2. 放入 N.E.K.O. 插件目录\n3. 重启 N.E.K.O.\n\n## 使用说明\n\n安装后，N.E.K.O. 会自动加载新功能。你可以在设置中调整互动频率。\n\n## 贡献\n\n欢迎提交 PR 和 Issue！",
+      "createdAt": "2025-10-01",
+      "updatedAt": "2026-03-28",
+      "isRecommended": true
+    },
+    {
+      "id": "neko-function-toolkit",
+      "name": "Neko Function Toolkit",
+      "description": "功能性工具集合，提供系统监控、文件管理、网络工具等实用功能",
+      "version": "3.0.2",
+      "author": {
+        "name": "TechMaster",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=tech",
+        "github": "https://github.com/TechMaster"
+      },
+      "githubRepo": "https://github.com/TechMaster/neko-function-toolkit",
+      "zone": "function",
+      "tags": ["功能", "工具", "系统", "监控"],
+      "downloads": 8930,
+      "likes": 186,
+      "aiRating": {
+        "functionality": "A",
+        "security": "B",
+        "documentation": "B",
+        "ratedAt": "2026-03-22"
+      },
+      "adminRating": {
+        "functionality": "B",
+        "security": "B",
+        "documentation": "C",
+        "ratedAt": "2026-03-23"
+      },
+      "readme": "# Neko Function Toolkit\n\n功能性工具集合插件。\n\n## 包含工具\n\n- 系统监控：CPU、内存、磁盘使用率\n- 文件管理：快速搜索、批量重命名\n- 网络工具：Ping、端口扫描、网速测试\n- 剪贴板管理：历史记录、快速粘贴\n- 快捷命令：自定义命令快捷方式\n\n## 安装\n\n```bash\npip install neko-function-toolkit\n```\n\n## 配置\n\n编辑 `~/.neko/toolkit.conf` 进行个性化配置。\n\n## 注意事项\n\n部分功能需要管理员权限。",
+      "createdAt": "2025-06-20",
+      "updatedAt": "2026-03-15",
+      "isRecommended": false
+    },
+    {
+      "id": "neko-entertainment-hub",
+      "name": "Neko Entertainment Hub",
+      "description": "娱乐中心插件，提供音乐播放、视频推荐、笑话段子等娱乐功能",
+      "version": "1.8.5",
+      "author": {
+        "name": "FunCreator",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=fun",
+        "github": "https://github.com/FunCreator"
+      },
+      "githubRepo": "https://github.com/FunCreator/neko-entertainment-hub",
+      "zone": "entertainment",
+      "tags": ["娱乐", "音乐", "视频", "笑话"],
+      "downloads": 12560,
+      "likes": 267,
+      "aiRating": {
+        "functionality": "A",
+        "security": "A",
+        "documentation": "B",
+        "ratedAt": "2026-03-24"
+      },
+      "adminRating": {
+        "functionality": "A",
+        "security": "A",
+        "documentation": "B",
+        "ratedAt": "2026-03-25"
+      },
+      "readme": "# Neko Entertainment Hub\n\n娱乐中心插件，让你的 N.E.K.O. 更加有趣！\n\n## 功能\n\n- 音乐播放：支持网易云音乐、QQ音乐\n- 视频推荐：B站、YouTube 热门视频\n- 每日笑话：让 N.E.K.O. 给你讲笑话\n- 谜语游戏：互动猜谜\n- 塔罗牌占卜：娱乐占卜功能\n\n## 安装\n\n下载插件并放入 N.E.K.O. 插件目录。\n\n## 使用\n\n对 N.E.K.O. 说：\"播放音乐\"、\"讲个笑话\"等。\n\n## API 密钥\n\n部分功能需要配置 API 密钥，请在设置中添加。",
+      "createdAt": "2025-09-10",
+      "updatedAt": "2026-03-22",
+      "isRecommended": true
+    },
+    {
+      "id": "neko-dev-tools",
+      "name": "Neko Dev Tools",
+      "description": "开发者工具箱，提供代码片段管理、API测试、日志分析等开发辅助功能",
+      "version": "2.1.0",
+      "author": {
+        "name": "CodeNinja",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=code",
+        "github": "https://github.com/CodeNinja"
+      },
+      "githubRepo": "https://github.com/CodeNinja/neko-dev-tools",
+      "zone": "tool",
+      "tags": ["开发", "工具", "代码", "API"],
+      "downloads": 6780,
+      "likes": 145,
+      "aiRating": {
+        "functionality": "A",
+        "security": "A",
+        "documentation": "A",
+        "ratedAt": "2026-03-26"
+      },
+      "adminRating": {
+        "functionality": "A",
+        "security": "A",
+        "documentation": "A",
+        "ratedAt": "2026-03-27"
+      },
+      "readme": "# Neko Dev Tools\n\n专为开发者设计的工具箱插件。\n\n## 功能列表\n\n- 代码片段管理：保存和快速插入常用代码\n- API 测试：内置 HTTP 客户端\n- 日志分析：智能解析日志文件\n- 正则测试：正则表达式验证工具\n- JSON 格式化：美化和验证 JSON\n- Base64 编解码：快速转换\n\n## 安装\n\n```bash\nnpm install -g neko-dev-tools\n```\n\n## 快捷键\n\n- `Ctrl+Shift+C`: 打开代码片段\n- `Ctrl+Shift+A`: API 测试工具\n- `Ctrl+Shift+L`: 日志分析器\n\n## 贡献\n\n欢迎提交 PR！",
+      "createdAt": "2025-07-05",
+      "updatedAt": "2026-03-25",
+      "isRecommended": false
+    },
+    {
+      "id": "neko-music-player",
+      "name": "Neko Music Player",
+      "description": "高级音乐播放器插件，支持多平台音乐源和智能歌单推荐",
+      "version": "1.2.3",
+      "author": {
+        "name": "MusicLover",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=music",
+        "github": "https://github.com/MusicLover"
+      },
+      "githubRepo": "https://github.com/MusicLover/neko-music-player",
+      "zone": "entertainment",
+      "tags": ["音乐", "播放", "娱乐", "推荐"],
+      "downloads": 9870,
+      "likes": 203,
+      "aiRating": {
+        "functionality": "B",
+        "security": "A",
+        "documentation": "C",
+        "ratedAt": "2026-03-20"
+      },
+      "adminRating": {
+        "functionality": "B",
+        "security": "A",
+        "documentation": "C",
+        "ratedAt": "2026-03-21"
+      },
+      "readme": "# Neko Music Player\n\n高级音乐播放器插件。\n\n## 支持平台\n\n- 网易云音乐\n- QQ音乐\n- Spotify\n- Apple Music\n\n## 特性\n\n- 智能歌单推荐\n- 歌词同步显示\n- 音质选择\n- 睡眠定时\n- 背景播放\n\n## 安装\n\n下载并安装插件，然后在设置中配置音乐平台账号。\n\n## 使用\n\n对 N.E.K.O. 说：\"播放周杰伦的歌\"、\"随机播放\"等。",
+      "createdAt": "2025-11-15",
+      "updatedAt": "2026-03-18",
+      "isRecommended": false
+    },
+    {
+      "id": "neko-chat-enhancer",
+      "name": "Neko Chat Enhancer",
+      "description": "聊天增强插件，提供智能回复建议、表情包管理、聊天记录分析等功能",
+      "version": "2.5.1",
+      "author": {
+        "name": "ChatMaster",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=chat",
+        "github": "https://github.com/ChatMaster"
+      },
+      "githubRepo": "https://github.com/ChatMaster/neko-chat-enhancer",
+      "zone": "function",
+      "tags": ["聊天", "表情", "增强", "社交"],
+      "downloads": 18230,
+      "likes": 421,
+      "aiRating": {
+        "functionality": "S",
+        "security": "A",
+        "documentation": "A",
+        "ratedAt": "2026-03-27"
+      },
+      "adminRating": {
+        "functionality": "A",
+        "security": "A",
+        "documentation": "A",
+        "ratedAt": "2026-03-28"
+      },
+      "readme": "# Neko Chat Enhancer\n\n聊天增强插件，让 N.E.K.O. 的聊天体验更上一层楼！\n\n## 主要功能\n\n- 智能回复建议：根据上下文提供回复建议\n- 表情包管理：快速搜索和发送表情包\n- 聊天记录分析：分析聊天习惯和偏好\n- 话题推荐：智能推荐聊天话题\n- 情感分析：识别对方情绪并调整回复\n\n## 安装\n\n```bash\npip install neko-chat-enhancer\n```\n\n## 配置\n\n在设置中启用需要的功能模块。\n\n## 隐私说明\n\n所有聊天记录仅在本地处理，不会上传到云端。",
+      "createdAt": "2025-05-20",
+      "updatedAt": "2026-03-27",
+      "isRecommended": true
+    },
+    {
+      "id": "neko-game-stats",
+      "name": "Neko Game Stats",
+      "description": "游戏数据统计插件，追踪和分析你的游戏表现和进度",
+      "version": "1.0.8",
+      "author": {
+        "name": "GameAnalyzer",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=game",
+        "github": "https://github.com/GameAnalyzer"
+      },
+      "githubRepo": "https://github.com/GameAnalyzer/neko-game-stats",
+      "zone": "game",
+      "tags": ["游戏", "统计", "数据", "分析"],
+      "downloads": 4560,
+      "likes": 98,
+      "aiRating": {
+        "functionality": "B",
+        "security": "A",
+        "documentation": "C",
+        "ratedAt": "2026-03-18"
+      },
+      "adminRating": {
+        "functionality": "C",
+        "security": "A",
+        "documentation": "C",
+        "ratedAt": "2026-03-19"
+      },
+      "readme": "# Neko Game Stats\n\n游戏数据统计插件。\n\n## 功能\n\n- 游戏时长统计\n- 胜率分析\n- 技能提升追踪\n- 成就进度\n- 好友排行榜\n\n## 支持游戏\n\n- 英雄联盟\n- 王者荣耀\n- 原神\n- 更多游戏持续添加中...\n\n## 安装\n\n下载插件并放入 N.E.K.O. 插件目录。\n\n## 数据同步\n\n支持将数据同步到云端，换设备不丢失。",
+      "createdAt": "2026-01-10",
+      "updatedAt": "2026-03-15",
+      "isRecommended": false
+    },
+    {
+      "id": "neko-scheduler",
+      "name": "Neko Scheduler",
+      "description": "智能日程管理插件，帮助 N.E.K.O. 更好地管理你的时间和任务",
+      "version": "1.4.2",
+      "author": {
+        "name": "TimeManager",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=time",
+        "github": "https://github.com/TimeManager"
+      },
+      "githubRepo": "https://github.com/TimeManager/neko-scheduler",
+      "zone": "tool",
+      "tags": ["日程", "任务", "管理", "提醒"],
+      "downloads": 11200,
+      "likes": 234,
+      "aiRating": {
+        "functionality": "A",
+        "security": "A",
+        "documentation": "A",
+        "ratedAt": "2026-03-23"
+      },
+      "adminRating": {
+        "functionality": "A",
+        "security": "A",
+        "documentation": "A",
+        "ratedAt": "2026-03-24"
+      },
+      "readme": "# Neko Scheduler\n\n智能日程管理插件。\n\n## 功能特性\n\n- 语音创建任务\n- 智能提醒\n- 日程冲突检测\n- 习惯养成追踪\n- 与日历应用同步\n\n## 安装\n\n```bash\nnpm install neko-scheduler\n```\n\n## 使用示例\n\n对 N.E.K.O. 说：\n- \"明天下午3点提醒我开会\"\n- \"帮我安排每天运动1小时\"\n- \"查看今天的日程\"\n\n## 同步\n\n支持 Google Calendar、Outlook、Apple Calendar 同步。",
+      "createdAt": "2025-08-30",
+      "updatedAt": "2026-03-23",
+      "isRecommended": false
+    },
+    {
+      "id": "neko-translator",
+      "name": "Neko Translator",
+      "description": "多语言翻译插件，支持实时翻译和语言学习功能",
+      "version": "2.0.0",
+      "author": {
+        "name": "LinguaMaster",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=lingua",
+        "github": "https://github.com/LinguaMaster"
+      },
+      "githubRepo": "https://github.com/LinguaMaster/neko-translator",
+      "zone": "function",
+      "tags": ["翻译", "语言", "学习", "工具"],
+      "downloads": 15670,
+      "likes": 312,
+      "aiRating": {
+        "functionality": "A",
+        "security": "A",
+        "documentation": "A",
+        "ratedAt": "2026-03-25"
+      },
+      "adminRating": {
+        "functionality": "A",
+        "security": "A",
+        "documentation": "A",
+        "ratedAt": "2026-03-26"
+      },
+      "readme": "# Neko Translator\n\n多语言翻译插件。\n\n## 支持语言\n\n- 中文、英语、日语、韩语\n- 法语、德语、西班牙语、俄语\n- 共支持 50+ 种语言\n\n## 功能\n\n- 实时翻译\n- 语音翻译\n- 图片文字翻译\n- 语言学习模式\n- 生词本\n\n## 安装\n\n```bash\npip install neko-translator\n```\n\n## 使用\n\n对 N.E.K.O. 说：\"翻译这句话成英语\"、\"这个词是什么意思\"等。\n\n## API\n\n使用 Google Translate API 和 DeepL API。",
+      "createdAt": "2025-04-15",
+      "updatedAt": "2026-03-24",
+      "isRecommended": true
+    },
+    {
+      "id": "neko-image-gen",
+      "name": "Neko Image Generator",
+      "description": "AI图像生成插件，让 N.E.K.O. 帮你生成各种风格的图片",
+      "version": "1.1.5",
+      "author": {
+        "name": "ArtCreator",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=art",
+        "github": "https://github.com/ArtCreator"
+      },
+      "githubRepo": "https://github.com/ArtCreator/neko-image-gen",
+      "zone": "entertainment",
+      "tags": ["AI", "图像", "生成", "娱乐"],
+      "downloads": 28900,
+      "likes": 678,
+      "aiRating": {
+        "functionality": "S",
+        "security": "A",
+        "documentation": "B",
+        "ratedAt": "2026-03-29"
+      },
+      "adminRating": {
+        "functionality": "S",
+        "security": "A",
+        "documentation": "B",
+        "ratedAt": "2026-03-30"
+      },
+      "readme": "# Neko Image Generator\n\nAI图像生成插件。\n\n## 功能\n\n- 文生图：根据描述生成图片\n- 图生图：基于现有图片创作\n- 风格转换：将照片转为动漫、油画等风格\n- 头像生成：生成专属头像\n\n## 支持模型\n\n- Stable Diffusion\n- DALL-E 3\n- Midjourney (通过 API)\n\n## 安装\n\n```bash\nnpm install neko-image-gen\n```\n\n## 配置 API 密钥\n\n在设置中添加你的 API 密钥。\n\n## 使用\n\n对 N.E.K.O. 说：\"生成一张猫娘的图片\"、\"把这张照片转成动漫风格\"等。",
+      "createdAt": "2025-12-01",
+      "updatedAt": "2026-03-29",
+      "isRecommended": true
+    },
+    {
+      "id": "neko-weather",
+      "name": "Neko Weather",
+      "description": "天气查询插件，提供实时天气、预报和出行建议",
+      "version": "1.3.0",
+      "author": {
+        "name": "WeatherMan",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=weather",
+        "github": "https://github.com/WeatherMan"
+      },
+      "githubRepo": "https://github.com/WeatherMan/neko-weather",
+      "zone": "tool",
+      "tags": ["天气", "查询", "工具", "生活"],
+      "downloads": 7890,
+      "likes": 156,
+      "aiRating": {
+        "functionality": "B",
+        "security": "A",
+        "documentation": "B",
+        "ratedAt": "2026-03-19"
+      },
+      "adminRating": {
+        "functionality": "B",
+        "security": "A",
+        "documentation": "B",
+        "ratedAt": "2026-03-20"
+      },
+      "readme": "# Neko Weather\n\n天气查询插件。\n\n## 功能\n\n- 实时天气查询\n- 7天天气预报\n- 空气质量指数\n- 出行建议\n- 极端天气预警\n\n## 数据源\n\n- OpenWeatherMap\n- 和风天气\n- 心知天气\n\n## 安装\n\n```bash\npip install neko-weather\n```\n\n## 配置\n\n在设置中选择数据源并添加 API 密钥。\n\n## 使用\n\n对 N.E.K.O. 说：\"今天天气怎么样\"、\"明天需要带伞吗\"等。",
+      "createdAt": "2025-07-25",
+      "updatedAt": "2026-03-17",
+      "isRecommended": false
+    }
+  ],
+  "reviews": [
+    {
+      "id": "review-1",
+      "pluginId": "neko-game-helper",
+      "user": {
+        "name": "GameFan",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=gamer"
+      },
+      "content": "超级好用的插件！查询原神数据特别方便，N.E.K.O. 现在可以帮我查角色配装了！",
+      "likes": 45,
+      "createdAt": "2026-03-25"
+    },
+    {
+      "id": "review-2",
+      "pluginId": "neko-game-helper",
+      "user": {
+        "name": "RPGPlayer",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=rpg"
+      },
+      "content": "功能很强大，就是希望支持更多游戏，期待更新！",
+      "likes": 23,
+      "createdAt": "2026-03-22"
+    },
+    {
+      "id": "review-3",
+      "pluginId": "neko-companion-plus",
+      "user": {
+        "name": "CatLover123",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=cat123"
+      },
+      "content": "装上这个插件后，N.E.K.O. 变得更可爱了！互动方式多了很多，强烈推荐！",
+      "likes": 89,
+      "createdAt": "2026-03-28"
+    },
+    {
+      "id": "review-4",
+      "pluginId": "neko-image-gen",
+      "user": {
+        "name": "ArtLover",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=artlover"
+      },
+      "content": "生成图片质量超高！N.E.K.O. 现在可以帮我画插画了，太神奇了！",
+      "likes": 156,
+      "createdAt": "2026-03-29"
+    },
+    {
+      "id": "review-5",
+      "pluginId": "neko-chat-enhancer",
+      "user": {
+        "name": "SocialButterfly",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=social"
+      },
+      "content": "聊天体验提升巨大！智能回复建议特别实用，表情包管理也很方便。",
+      "likes": 67,
+      "createdAt": "2026-03-27"
+    }
+  ],
+  "zones": [
+    {
+      "id": "game",
+      "name": "游戏区",
+      "description": "游戏辅助、数据查询、攻略工具",
+      "icon": "Gamepad2",
+      "color": "#EF4444",
+      "pluginCount": 128
+    },
+    {
+      "id": "companion",
+      "name": "陪玩区",
+      "description": "增强陪伴体验、互动功能、情感表达",
+      "icon": "Heart",
+      "color": "#F472B6",
+      "pluginCount": 86
+    },
+    {
+      "id": "function",
+      "name": "功能区",
+      "description": "实用工具、系统功能、效率提升",
+      "icon": "Zap",
+      "color": "#3B82F6",
+      "pluginCount": 215
+    },
+    {
+      "id": "entertainment",
+      "name": "娱乐区",
+      "description": "音乐、视频、游戏、休闲",
+      "icon": "Music",
+      "color": "#F59E0B",
+      "pluginCount": 156
+    },
+    {
+      "id": "tool",
+      "name": "工具区",
+      "description": "开发工具、系统工具、管理工具",
+      "icon": "Wrench",
+      "color": "#22C55E",
+      "pluginCount": 98
+    }
+  ],
+  "stats": {
+    "totalPlugins": 683,
+    "totalDownloads": 1256789,
+    "activeDevelopers": 342,
+    "newPluginsThisWeek": 23
+  }
+}

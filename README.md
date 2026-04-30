@@ -1,0 +1,312 @@
+# N.E.KO 插件市场后端
+
+基于 FastAPI + SQLAlchemy + SQLite 构建的插件市场后端 API，支持 AI 自动审核和 EC 代码签名。
+
+## 技术栈
+
+- **FastAPI**: 现代、高性能的 Python Web 框架
+- **SQLAlchemy 2.0**: ORM 数据库工具
+- **SQLite**: 轻量级数据库（使用 aiosqlite 支持异步）
+- **Pydantic**: 数据验证和序列化
+- **JWT**: 身份认证
+- **GitHub API**: 拉取仓库代码
+- **OpenAI API**: AI 自动审核
+- **ECDSA (P-256)**: 椭圆曲线数字签名
+
+## 项目结构
+
+```
+.
+├── app/
+│   ├── __init__.py
+│   ├── main.py              # FastAPI 应用入口
+│   ├── core/                # 核心配置
+│   │   ├── config.py        # 应用配置
+│   │   ├── database.py      # 数据库连接
+│   │   ├── security.py      # JWT 认证
+│   │   └── crypto.py        # EC 签名加密
+│   ├── models/              # 数据模型
+│   │   ├── plugin.py        # 插件模型
+│   │   ├── category.py      # 分类模型
+│   │   ├── user.py          # 用户模型
+│   │   ├── review.py        # 评论/评分模型
+│   │   ├── version.py       # 版本模型
+│   │   ├── plugin_category.py  # 插件-分类关联表
+│   │   ├── plugin_review.py    # 插件审核记录
+│   │   └── plugin_signature.py # 插件签名记录
+│   ├── schemas/             # Pydantic 数据模型
+│   ├── services/            # 业务逻辑层
+│   │   ├── plugin_service.py
+│   │   ├── category_service.py
+│   │   ├── review_service.py
+│   │   ├── version_service.py
+│   │   ├── auth_service.py
+│   │   ├── github_service.py
+│   │   ├── ai_review_service.py
+│   │   ├── plugin_review_service.py
+│   │   └── signature_service.py  # 签名服务
+│   └── routers/             # API 路由
+│       ├── auth.py
+│       ├── plugins.py
+│       ├── categories.py
+│       ├── users.py
+│       ├── reviews.py
+│       ├── versions.py
+│       ├── plugin_reviews.py
+│       └── signatures.py      # 签名路由
+├── requirements.txt
+└── README.md
+```
+
+## 安装和运行
+
+### 1. 安装依赖
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. 配置环境变量
+
+创建 `.env` 文件：
+
+```env
+# 安全配置（必需）
+SECRET_KEY=your-secret-key-here
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# GitHub 配置（可选，用于拉取私有仓库）
+GITHUB_TOKEN=your-github-token
+
+# AI 审核配置（可选）
+AI_API_KEY=your-openai-api-key
+AI_API_BASE=https://api.openai.com/v1
+AI_MODEL=gpt-4
+```
+
+### 3. 运行应用
+
+```bash
+# 开发模式（带热重载）
+uvicorn app.main:app --reload
+
+# 生产模式
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+### 4. 访问 API 文档
+
+启动后访问：
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+## API 接口概览
+
+### 认证
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | `/api/v1/auth/register` | 用户注册 |
+| POST | `/api/v1/auth/login` | 用户登录 |
+| POST | `/api/v1/auth/refresh` | 刷新令牌 |
+| GET | `/api/v1/auth/me` | 获取当前用户信息 |
+| POST | `/api/v1/auth/logout` | 用户登出 |
+
+### 插件管理
+
+| 方法 | 路径 | 描述 | 认证 |
+|------|------|------|------|
+| GET | `/api/v1/plugins` | 获取插件列表 | 否 |
+| GET | `/api/v1/plugins/featured` | 获取推荐插件 | 否 |
+| GET | `/api/v1/plugins/popular` | 获取热门插件 | 否 |
+| GET | `/api/v1/plugins/newest` | 获取最新插件 | 否 |
+| GET | `/api/v1/plugins/{id}` | 获取插件详情 | 否 |
+| GET | `/api/v1/plugins/slug/{slug}` | 通过 slug 获取插件 | 否 |
+| POST | `/api/v1/plugins` | 创建插件 | 是 |
+| PUT | `/api/v1/plugins/{id}` | 更新插件 | 是（所有者/管理员） |
+| DELETE | `/api/v1/plugins/{id}` | 删除插件 | 是（所有者/管理员） |
+| POST | `/api/v1/plugins/{id}/download` | 记录下载 | 否 |
+
+### AI 审核流程
+
+| 方法 | 路径 | 描述 | 认证 |
+|------|------|------|------|
+| POST | `/api/v1/plugins/{id}/submit-review` | 提交插件审核 | 是 |
+| POST | `/api/v1/reviews/{id}/start-ai-review` | 开始 AI 审核 | 是 |
+| POST | `/api/v1/reviews/{id}/submit-revision` | 提交修改 | 是 |
+| POST | `/api/v1/reviews/{id}/manual-review` | 人工审核 | 是（管理员） |
+| GET | `/api/v1/plugins/{id}/review-history` | 审核历史 | 是 |
+| GET | `/api/v1/plugins/{id}/active-review` | 进行中的审核 | 是 |
+
+### 代码签名
+
+#### 公钥管理（管理员）
+
+| 方法 | 路径 | 描述 | 认证 |
+|------|------|------|------|
+| POST | `/api/v1/signatures/admin/keys` | 创建密钥对 | 管理员 |
+
+#### 公钥查询（公开）
+
+| 方法 | 路径 | 描述 | 认证 |
+|------|------|------|------|
+| GET | `/api/v1/signatures/public-keys` | 获取所有公钥 | 否 |
+| GET | `/api/v1/signatures/public-keys/default` | 获取默认公钥 | 否 |
+
+#### 插件签名（管理员）
+
+| 方法 | 路径 | 描述 | 认证 |
+|------|------|------|------|
+| POST | `/api/v1/signatures/plugins/{id}/sign` | 生成代码签名 | 管理员 |
+| GET | `/api/v1/signatures/plugins/{id}/signatures` | 获取签名列表 | 是 |
+| GET | `/api/v1/signatures/plugins/{id}/signatures/{version}` | 获取版本签名 | 是 |
+| POST | `/api/v1/signatures/admin/signatures/{id}/revoke` | 撤销签名 | 管理员 |
+
+#### 签名校验（公开）
+
+| 方法 | 路径 | 描述 | 认证 |
+|------|------|------|------|
+| POST | `/api/v1/signatures/verify` | 完整签名验证 | 否 |
+| POST | `/api/v1/signatures/verify-simple` | 简化哈希验证 | 否 |
+
+## AI 审核流程
+
+### 审核阶段
+
+```
+submitted → fetching → fetched → ai_reviewing → ai_reviewed
+                                              ↓
+                    ┌───────────────────────────────────────┐
+                    ↓                                       ↓
+            needs_revision ← revision_submitted      ai_approved → manual_reviewing → approved/rejected
+                    ↑_______________________________________|
+```
+
+### 审核步骤
+
+1. **提交审核** (`submit-review`)
+   - 提供 GitHub 仓库 URL 和分支
+   - 系统自动拉取代码
+
+2. **AI 自动审核** (`start-ai-review`)
+   - 拉取仓库代码和文件
+   - 分析 manifest.json
+   - 审核 README 文档
+   - 代码安全扫描
+   - 生成审核报告和评分
+
+3. **审核结果处理**
+   - **通过 (approve)**: AI 评分 ≥ 80 且无严重问题
+   - **需要修改 (needs_revision)**: 返回修改建议
+   - **拒绝 (reject)**: 存在严重安全问题
+   - **转人工 (manual_review)**: AI 不确定的情况
+
+4. **修改和重新审核** (`submit-revision`)
+   - 开发者根据反馈修改代码
+   - 重新提交进行 AI 审核
+
+5. **人工审核** (`manual-review`)
+   - 管理员进行最终审核
+   - 可以批准、拒绝或要求修改
+
+### AI 评分维度
+
+- **安全性 (40%)**: 代码安全、依赖安全、权限检查
+- **代码质量 (25%)**: 代码规范、可维护性、性能
+- **文档完整性 (20%)**: README、注释、示例
+- **功能性 (15%)**: 功能实现、兼容性
+
+## 代码签名系统
+
+### 签名流程
+
+1. **创建密钥对**（管理员）
+   ```bash
+   POST /api/v1/signatures/admin/keys
+   {
+       "name": "production-key",
+       "set_as_default": true
+   }
+   ```
+
+2. **生成签名**（插件审核通过后）
+   ```bash
+   POST /api/v1/signatures/plugins/{plugin_id}/sign
+   ```
+   系统会自动：
+   - 从 GitHub 拉取 Python 文件
+   - 计算每个文件的 MD5
+   - 生成 EC (P-256) 签名
+   - 存储签名记录
+
+3. **客户端验证**
+   ```bash
+   POST /api/v1/signatures/verify
+   {
+       "plugin_name": "my-plugin",
+       "version": "1.0.0",
+       "author": "author_name",
+       "repo_url": "https://github.com/xxx/neko_plugin_xxx",
+       "files": [
+           {"path": "main.py", "content": "..."},
+           {"path": "utils.py", "content": "..."}
+       ],
+       "signature": "base64_encoded_signature"
+   }
+   ```
+
+### 签名格式
+
+签名载荷格式：
+```
+plugin_name|version|author|repo_url|files_hash
+```
+
+其中 `files_hash` 是所有 Python 文件 MD5 的组合哈希。
+
+### 获取公钥
+
+客户端需要公钥来验证签名：
+```bash
+GET /api/v1/signatures/public-keys
+```
+
+返回：
+```json
+{
+  "name": "production-key",
+  "public_key": "-----BEGIN PUBLIC KEY-----\n...",
+  "is_default": true,
+  "created_at": "2024-01-01T00:00:00"
+}
+```
+
+## 认证说明
+
+所有需要认证的接口需要在请求头中添加：
+
+```
+Authorization: Bearer <access_token>
+```
+
+获取令牌：
+1. 调用 `/api/v1/auth/login` 或 `/api/v1/auth/register`
+2. 从响应中获取 `access_token`
+3. 在后续请求中使用该令牌
+
+## 环境配置
+
+### 必需配置
+
+- `SECRET_KEY`: JWT 签名密钥（生产环境必须修改）
+
+### 可选配置
+
+- `GITHUB_TOKEN`: GitHub Personal Access Token（用于私有仓库）
+- `AI_API_KEY`: OpenAI API Key（用于 AI 审核）
+- `AI_MODEL`: AI 模型名称（默认 gpt-4）
+- `DATABASE_URL`: 数据库连接字符串（默认 SQLite）
+
+## License
+
+MIT
