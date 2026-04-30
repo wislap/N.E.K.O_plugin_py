@@ -54,7 +54,9 @@
 │       ├── versions.py
 │       ├── plugin_reviews.py
 │       └── signatures.py      # 签名路由
-├── requirements.txt
+├── pyproject.toml       # Python 项目依赖和测试配置
+├── uv.lock              # uv 锁文件
+├── requirements.txt     # 旧 pip 工作流兼容文件
 └── README.md
 ```
 
@@ -68,11 +70,10 @@
 
 ```bash
 cd /home/yun_wan/python_programe/neko_plugin_market/N.E.K.O_plugin_py
-uv venv
-uv pip install -r requirements.txt
+uv sync --dev
 ```
 
-也可以使用普通虚拟环境：
+也可以使用旧的 `pip + requirements.txt` 工作流：
 
 ```bash
 python -m venv .venv
@@ -152,6 +153,33 @@ cd NEKO_Plugins_Market
 npm run build
 ```
 
+### 7. Docker Compose 开发环境
+
+项目提供开发版 Compose，用于快速带走和本地联调：
+
+```bash
+cd /home/yun_wan/python_programe/neko_plugin_market/N.E.K.O_plugin_py
+docker compose up --build
+```
+
+启动后访问：
+
+- 前端：http://localhost:5173/
+- 后端：http://localhost:8000/
+- API 文档：http://localhost:8000/docs
+
+Compose 会将 SQLite 数据库保存到 `backend_data` volume：
+
+```env
+DATABASE_URL=sqlite+aiosqlite:////data/plugin_market.db
+```
+
+前端容器内会使用：
+
+```env
+VITE_API_BASE_URL=http://localhost:8000/api/v1
+```
+
 ### 常见问题
 
 #### `ModuleNotFoundError: No module named 'app'`
@@ -168,7 +196,7 @@ ENVIRONMENT=development uv run uvicorn app.main:app --reload
 请重新安装依赖：
 
 ```bash
-uv pip install -r requirements.txt
+uv sync --dev
 ```
 
 #### 前端无法访问后端 API
