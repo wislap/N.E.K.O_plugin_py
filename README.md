@@ -58,47 +58,126 @@
 └── README.md
 ```
 
-## 安装和运行
+## 快速启动
 
-### 1. 安装依赖
+项目分为后端 FastAPI 和前端 Vite/React 两部分。以下命令都从项目根目录执行，除非特别说明。
+
+### 1. 准备后端环境
+
+推荐使用 `uv`：
 
 ```bash
+cd /home/yun_wan/python_programe/neko_plugin_market/N.E.K.O_plugin_py
+uv venv
+uv pip install -r requirements.txt
+```
+
+也可以使用普通虚拟环境：
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. 配置环境变量
+### 2. 配置后端环境变量
 
-创建 `.env` 文件：
-
-```env
-# 安全配置（必需）
-SECRET_KEY=your-secret-key-here
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-# GitHub 配置（可选，用于拉取私有仓库）
-GITHUB_TOKEN=your-github-token
-
-# AI 审核配置（可选）
-AI_API_KEY=your-openai-api-key
-AI_API_BASE=https://api.openai.com/v1
-AI_MODEL=gpt-4
-```
-
-### 3. 运行应用
+复制模板：
 
 ```bash
-# 开发模式（带热重载）
-uvicorn app.main:app --reload
-
-# 生产模式
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+cp .env.example .env
 ```
 
-### 4. 访问 API 文档
+本地开发可保留：
+
+```env
+ENVIRONMENT=development
+DATABASE_URL=sqlite+aiosqlite:///./plugin_market.db
+```
+
+生产环境必须设置高强度 `SECRET_KEY`，不能依赖开发模式自动生成。
+
+### 3. 启动后端
+
+```bash
+ENVIRONMENT=development uv run uvicorn app.main:app --reload
+
+# 如需局域网访问
+ENVIRONMENT=development uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+注意：必须在项目根目录 `N.E.K.O_plugin_py` 执行，不要在 `app/` 目录里执行。
 
 启动后访问：
+
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
+- Health: http://localhost:8000/health
+
+### 4. 初始化默认分区
+
+后端启动时会自动创建数据库表。如需初始化默认分区：
+
+```bash
+ENVIRONMENT=development uv run python init_data.py
+```
+
+### 5. 启动前端
+
+```bash
+cd NEKO_Plugins_Market
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+前端默认地址：
+
+- http://localhost:5173/
+- 管理后台入口：http://localhost:5173/#/admin/login
+
+### 6. 运行测试
+
+后端测试使用内存 SQLite，不会修改本地 `plugin_market.db`：
+
+```bash
+cd /home/yun_wan/python_programe/neko_plugin_market/N.E.K.O_plugin_py
+ENVIRONMENT=development uv run pytest
+```
+
+前端构建检查：
+
+```bash
+cd NEKO_Plugins_Market
+npm run build
+```
+
+### 常见问题
+
+#### `ModuleNotFoundError: No module named 'app'`
+
+说明启动命令在错误目录执行。请回到项目根目录：
+
+```bash
+cd /home/yun_wan/python_programe/neko_plugin_market/N.E.K.O_plugin_py
+ENVIRONMENT=development uv run uvicorn app.main:app --reload
+```
+
+#### `email-validator is not installed`
+
+请重新安装依赖：
+
+```bash
+uv pip install -r requirements.txt
+```
+
+#### 前端无法访问后端 API
+
+检查 `NEKO_Plugins_Market/.env.local`：
+
+```env
+VITE_API_BASE_URL=http://localhost:8000/api/v1
+```
 
 ## API 接口概览
 
