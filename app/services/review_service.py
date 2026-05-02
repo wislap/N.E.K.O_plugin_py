@@ -4,7 +4,9 @@ from sqlalchemy.orm import selectinload
 from typing import Optional, List
 
 from app.models.review import Review
+from app.models.plugin import Plugin
 from app.services.plugin_service import PluginService
+from app.services.notification_service import NotificationService
 
 
 class ReviewService:
@@ -100,6 +102,16 @@ class ReviewService:
         )
         
         db.add(review)
+        plugin = await db.get(Plugin, plugin_id)
+        if plugin and plugin.author_id != author_id:
+            NotificationService.add(
+                db,
+                user_id=plugin.author_id,
+                type="plugin_reviewed",
+                title="插件收到新评论",
+                content=f"你的插件「{plugin.name}」收到了一条 {rating:g} 分评论。",
+                target_url=f"/plugin/{plugin.id}",
+            )
         await db.commit()
         await db.refresh(review)
         

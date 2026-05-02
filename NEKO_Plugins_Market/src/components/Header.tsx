@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Github, Menu, X, Cat, LogOut, Package, Upload, ShieldCheck } from 'lucide-react';
+import { Search, Github, Menu, X, Cat, LogOut, Package, Upload, ShieldCheck, Bell } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,13 +12,15 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { authApi, type User as ApiUser } from '@/services/api';
+import { authApi, notificationsApi, type Notification, type User as ApiUser } from '@/services/api';
 
 export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentUser, setCurrentUser] = useState<ApiUser | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -28,6 +30,44 @@ export function Header() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchNotifications() {
+      if (!currentUser) {
+        setNotifications([]);
+        setUnreadCount(0);
+        return;
+      }
+
+      try {
+        const [items, unread] = await Promise.all([
+          notificationsApi.list(8),
+          notificationsApi.unreadCount()
+        ]);
+        if (isMounted) {
+          setNotifications(items);
+          setUnreadCount(unread.count);
+        }
+      } catch {
+        if (isMounted) {
+          setNotifications([]);
+          setUnreadCount(0);
+        }
+      }
+    }
+
+    fetchNotifications();
+    const timer = window.setInterval(fetchNotifications, 30000);
+    window.addEventListener('notifications:changed', fetchNotifications);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(timer);
+      window.removeEventListener('notifications:changed', fetchNotifications);
+    };
+  }, [currentUser]);
 
   useEffect(() => {
     let isMounted = true;
@@ -97,8 +137,40 @@ export function Header() {
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('currentUser');
     setCurrentUser(null);
+    setNotifications([]);
+    setUnreadCount(0);
     window.dispatchEvent(new Event('auth:changed'));
     navigate('/');
+  };
+
+  const openNotification = async (notification: Notification) => {
+    if (!notification.is_read) {
+      try {
+        await notificationsApi.markRead(notification.id);
+      } catch {
+        // 读取失败不阻断跳转。
+      }
+      setUnreadCount((count) => Math.max(0, count - 1));
+      setNotifications((items) =>
+        items.map((item) =>
+          item.id === notification.id ? { ...item, is_read: true } : item
+        )
+      );
+    }
+
+    if (notification.target_url) {
+      navigate(notification.target_url);
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    try {
+      await notificationsApi.markAllRead();
+      setUnreadCount(0);
+      setNotifications((items) => items.map((item) => ({ ...item, is_read: true })));
+    } catch {
+      // 保持当前状态。
+    }
   };
 
   const userLabel = currentUser?.display_name || currentUser?.username;
@@ -170,27 +242,93 @@ export function Header() {
               <Github className="w-5 h-5" />
             </a>
             {currentUser ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="ml-2 flex items-center gap-2 rounded-full border border-white/10 bg-white/5 p-1 pr-3 text-sm text-slate-200 transition-colors hover:border-primary/40 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-primary/40"
-                    aria-label="打开用户菜单"
+              <div className="ml-2 flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="relative rounded-full border border-white/10 bg-white/5 p-2 text-slate-300 transition-colors hover:border-primary/40 hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      aria-label="打开通知"
+                    >
+                      <Bell className="h-5 w-5" />
+                      {unreadCount > 0 && (
+                        <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-primary px-1.5 text-center text-[10px] font-bold leading-5 text-primary-foreground">
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                      )}
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    sideOffset={10}
+                    className="w-80 border-slate-800 bg-[#111827]/95 p-2 text-slate-200 shadow-2xl shadow-black/40 backdrop-blur-xl"
                   >
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={currentUser.avatar_url ?? undefined} alt={userLabel} />
-                      <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                        {userInitial}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="hidden max-w-28 truncate lg:inline">{userLabel}</span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  sideOffset={10}
-                  className="w-64 border-slate-800 bg-[#111827]/95 p-2 text-slate-200 shadow-2xl shadow-black/40 backdrop-blur-xl"
-                >
+                    <DropdownMenuLabel className="flex items-center justify-between px-3 py-2">
+                      <span>通知</span>
+                      {unreadCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={markAllNotificationsRead}
+                          className="text-xs font-normal text-primary hover:text-primary/80"
+                        >
+                          全部已读
+                        </button>
+                      )}
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator className="bg-slate-800" />
+                    {notifications.length === 0 ? (
+                      <div className="px-3 py-8 text-center text-sm text-slate-500">
+                        暂无通知
+                      </div>
+                    ) : (
+                      notifications.map((notification) => (
+                        <DropdownMenuItem
+                          key={notification.id}
+                          className="cursor-pointer items-start rounded-lg px-3 py-3 text-slate-300 focus:bg-white/10 focus:text-white"
+                          onClick={() => openNotification(notification)}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              {!notification.is_read && (
+                                <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
+                              )}
+                              <span className="truncate text-sm font-medium text-white">
+                                {notification.title}
+                              </span>
+                            </div>
+                            {notification.content && (
+                              <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">
+                                {notification.content}
+                              </p>
+                            )}
+                          </div>
+                        </DropdownMenuItem>
+                      ))
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 p-1 pr-3 text-sm text-slate-200 transition-colors hover:border-primary/40 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      aria-label="打开用户菜单"
+                    >
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={currentUser.avatar_url ?? undefined} alt={userLabel} />
+                        <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                          {userInitial}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="hidden max-w-28 truncate lg:inline">{userLabel}</span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    sideOffset={10}
+                    className="w-64 border-slate-800 bg-[#111827]/95 p-2 text-slate-200 shadow-2xl shadow-black/40 backdrop-blur-xl"
+                  >
                   <DropdownMenuLabel className="px-3 py-2">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
@@ -239,8 +377,9 @@ export function Header() {
                       </DropdownMenuItem>
                     </>
                   )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             ) : (
               <div className="ml-2 flex items-center gap-2">
                 <Link to="/login">

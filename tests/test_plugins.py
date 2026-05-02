@@ -75,6 +75,13 @@ async def test_plugin_create_approve_list_and_download(
     assert len(my_plugins) == 1
     assert my_plugins[0]["slug"] == "demo-plugin"
 
+    admin_notifications = await client.get(
+        "/api/v1/notifications",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert admin_notifications.status_code == 200
+    assert any(item["type"] == "plugin_submitted" for item in admin_notifications.json())
+
     pending_list = await client.get("/api/v1/plugins")
     assert pending_list.status_code == 200
     assert pending_list.json()["total"] == 0
@@ -95,6 +102,13 @@ async def test_plugin_create_approve_list_and_download(
     assert approve_response.json()["review_summary"]["stage"] == "approved"
     assert approve_response.json()["review_summary"]["manual_review_notes"] == "资料完整，审核通过"
 
+    owner_notifications = await client.get(
+        "/api/v1/notifications",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert owner_notifications.status_code == 200
+    assert any(item["type"] == "plugin_approved" for item in owner_notifications.json())
+
     approved_detail = await client.get(f"/api/v1/plugins/{plugin['id']}")
     assert approved_detail.status_code == 200
     assert approved_detail.json()["slug"] == "demo-plugin"
@@ -114,7 +128,7 @@ async def test_plugin_create_approve_list_and_download(
 
     review_response = await client.post(
         f"/api/v1/plugins/{plugin['id']}/reviews",
-        headers={"Authorization": f"Bearer {owner_token}"},
+        headers={"Authorization": f"Bearer {admin_token}"},
         json={"rating": 5, "title": "好用", "content": "闭环测试评论"},
     )
     assert review_response.status_code == 201
@@ -123,6 +137,15 @@ async def test_plugin_create_approve_list_and_download(
     reviews_response = await client.get(f"/api/v1/plugins/{plugin['id']}/reviews")
     assert reviews_response.status_code == 200
     assert reviews_response.json()["total"] == 1
+
+    owner_notifications_after_review = await client.get(
+        "/api/v1/notifications",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert any(
+        item["type"] == "plugin_reviewed"
+        for item in owner_notifications_after_review.json()
+    )
 
 
 async def test_admin_reject_records_review_feedback_for_owner(

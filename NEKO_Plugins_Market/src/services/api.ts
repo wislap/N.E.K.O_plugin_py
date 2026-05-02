@@ -97,6 +97,18 @@ export interface SystemSetting {
   updated_at?: string;
 }
 
+export interface Notification {
+  id: number;
+  user_id: number;
+  type: string;
+  title: string;
+  content?: string | null;
+  target_url?: string | null;
+  is_read: boolean;
+  created_at: string;
+  read_at?: string | null;
+}
+
 export interface LogStats {
   review_logs?: number;
   sandbox_logs?: number;
@@ -509,6 +521,24 @@ export const marketApi = {
       activeDevelopers: new Set(plugins.map((plugin) => plugin.author.name)).size,
       newPluginsThisWeek: recentMarketCount(plugins)
     };
+  }
+};
+
+export const notificationsApi = {
+  list(limit = 20) {
+    return request<Notification[]>(`/notifications?limit=${limit}`);
+  },
+
+  unreadCount() {
+    return request<{ count: number }>("/notifications/unread-count");
+  },
+
+  markRead(notificationId: number) {
+    return post<Notification>(`/notifications/${notificationId}/read`);
+  },
+
+  markAllRead() {
+    return post<{ message: string; success: boolean }>("/notifications/read-all");
   }
 };
 

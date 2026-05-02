@@ -10,6 +10,7 @@ from app.core.time import utc_now
 from app.schemas.plugin import PluginCreate, PluginUpdate, PluginSearchParams
 from app.schemas.common import PaginatedResponse
 from app.utils.plugin_validator import validate_plugin_repo
+from app.services.notification_service import NotificationService
 
 
 class PluginService:
@@ -190,6 +191,14 @@ class PluginService:
             )
             categories = categories_result.scalars().all()
             plugin.categories = list(categories)
+
+        await NotificationService.notify_admins(
+            db,
+            type="plugin_submitted",
+            title="有新的插件待审核",
+            content=f"{author_name} 提交了插件「{plugin.name}」。",
+            target_url="/admin/plugins",
+        )
         
         await db.commit()
         await db.refresh(plugin)

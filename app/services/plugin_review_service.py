@@ -8,6 +8,7 @@ from app.models.plugin import Plugin, PluginStatus
 from app.core.time import utc_now
 from app.services.github_service import GitHubService
 from app.services.ai_review_service import AIReviewService
+from app.services.notification_service import NotificationService
 
 
 class PluginReviewService:
@@ -361,8 +362,24 @@ class PluginReviewService:
         if decision == "approve":
             plugin.status = PluginStatus.APPROVED
             plugin.published_at = now
+            NotificationService.add(
+                db,
+                user_id=plugin.author_id,
+                type="plugin_approved",
+                title="插件审核通过",
+                content=f"你的插件「{plugin.name}」已通过审核并上架。",
+                target_url=f"/plugin/{plugin.id}",
+            )
         else:
             plugin.status = PluginStatus.REJECTED
+            NotificationService.add(
+                db,
+                user_id=plugin.author_id,
+                type="plugin_rejected",
+                title="插件审核未通过",
+                content=notes or f"你的插件「{plugin.name}」未通过审核，请查看审核意见。",
+                target_url="/my/plugins",
+            )
 
         await self._add_history(
             db,

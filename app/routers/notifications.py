@@ -10,9 +10,12 @@ from typing import Optional
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
+from app.schemas.notification import Notification
+from app.schemas.common import MessageResponse
 from app.services.email_service import email_service
+from app.services.notification_service import NotificationService
 
-router = APIRouter(prefix="/notifications", tags=["notifications"])
+router = APIRouter(tags=["notifications"])
 
 
 class TestEmailRequest(BaseModel):
@@ -29,6 +32,54 @@ class ReviewNotificationRequest(BaseModel):
     plugin_version: str
     review_status: str  # approved/rejected/needs_revision
     feedback: Optional[str] = None
+
+
+@router.get("", response_model=list[Notification])
+async def list_notifications(
+    unread_only: bool = False,
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取当前用户站内通知。"""
+    return await NotificationService.list_for_user(
+        db,
+        current_user.id,
+        unread_only=unread_only,
+        limit=min(max(limit, 1), 100),
+    )
+
+
+@router.get("/unread-count")
+async def get_unread_count(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """获取当前用户未读通知数量。"""
+    return {"count": await NotificationService.unread_count(db, current_user.id)}
+
+
+@router.post("/{notification_id}/read", response_model=Notification)
+async def mark_notification_read(
+    notification_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """标记单条通知为已读。"""
+    notification = await NotificationService.mark_read(db, current_user.id, notification_id)
+    if not notification:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="通知不存在")
+    return notification
+
+
+@router.post("/read-all", response_model=MessageResponse)
+async def mark_all_notifications_read(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """标记当前用户所有通知为已读。"""
+    count = await NotificationService.mark_all_read(db, current_user.id)
+    return MessageResponse(message=f"已标记 {count} 条通知为已读")
 
 
 @router.post("/test")

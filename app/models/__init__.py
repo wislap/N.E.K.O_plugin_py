@@ -12,6 +12,7 @@ from app.models.permission import Permission, PermissionGroup, PermissionAuditLo
 from app.models.jwt_key import JWTKeyRecord
 from app.models.ai_sandbox_log import AISandboxLog
 from app.models.system_setting import SystemSetting, SMTPSettingKeys
+from app.models.notification import Notification
 
 __all__ = [
     "Plugin", "PluginStatus",
@@ -27,5 +28,6 @@ __all__ = [
     "Permission", "PermissionGroup", "PermissionAuditLog",
     "JWTKeyRecord",
     "AISandboxLog",
-    "SystemSetting", "SMTPSettingKeys"
+    "SystemSetting", "SMTPSettingKeys",
+    "Notification",
 ]
