@@ -9,16 +9,20 @@ from demo_data import (
     DEFAULT_CATEGORIES,
     DEFAULT_ZONES,
     DEMO_PASSWORD,
+    DEMO_NOTIFICATIONS,
     DEMO_PLUGINS,
+    DEMO_REVIEWS,
     DEMO_USERS,
     assert_demo_seed_allowed,
 )
 
+from app.core.config import settings
 from app.core.database import AsyncSessionLocal, Base, engine
 from app.core.security import get_password_hash
 from app.core.time import utc_now
 from app.models import (
     Category,
+    Notification,
     Plugin,
     PluginCategory,
     PluginRating,
@@ -33,6 +37,7 @@ from app.models import (
     Zone,
 )
 from app.services.bootstrap_service import BootstrapService
+from app.services.permission_service import PermissionService
 
 
 def status_from_value(value: str) -> PluginStatus:
@@ -98,6 +103,23 @@ async def upsert_user(db, user_data: dict) -> User:
     user.is_admin = user_data["is_admin"]
     user.is_active = True
     user.must_change_password = False
+    return user
+
+
+async def upsert_root_admin(db) -> User:
+    result = await db.execute(select(User).where(User.username == settings.INITIAL_ADMIN_USERNAME))
+    user = result.scalar_one_or_none()
+    if user is None:
+        user = User(username=settings.INITIAL_ADMIN_USERNAME)
+        db.add(user)
+
+    user.email = settings.INITIAL_ADMIN_EMAIL
+    user.hashed_password = get_password_hash(settings.INITIAL_ADMIN_PASSWORD)
+    user.display_name = user.display_name or "Root"
+    user.is_admin = True
+    user.is_active = True
+    user.must_change_password = True
+    await db.flush()
     return user
 
 
@@ -229,6 +251,42 @@ async def upsert_plugin(db, plugin_data: dict, users: dict[str, User], zones: di
     return plugin
 
 
+async def seed_reviews(db, users: dict[str, User], plugins: dict[str, Plugin]) -> None:
+    for review_data in DEMO_REVIEWS:
+        plugin = plugins[review_data["plugin"]]
+        author = users[review_data["author"]]
+        db.add(
+            Review(
+                plugin_id=plugin.id,
+                author_id=author.id,
+                rating=review_data["rating"],
+                title=review_data["title"],
+                content=review_data["content"],
+            )
+        )
+
+
+async def clear_demo_notifications(db, users: dict[str, User]) -> None:
+    user_ids = [user.id for user in users.values()]
+    if user_ids:
+        await db.execute(delete(Notification).where(Notification.user_id.in_(user_ids)))
+
+
+async def seed_notifications(db, users: dict[str, User]) -> None:
+    for notification_data in DEMO_NOTIFICATIONS:
+        user = users[notification_data["user"]]
+        db.add(
+            Notification(
+                user_id=user.id,
+                type=notification_data["type"],
+                title=notification_data["title"],
+                content=notification_data["content"],
+                target_url=notification_data["target_url"],
+                is_read=notification_data["is_read"],
+            )
+        )
+
+
 async def seed_demo_data() -> None:
     assert_demo_seed_allowed()
 
@@ -238,6 +296,7 @@ async def seed_demo_data() -> None:
     async with AsyncSessionLocal() as db:
         await BootstrapService.ensure_schema_compatibility(db)
         await BootstrapService.ensure_initial_admin(db)
+        await PermissionService().init_system_permissions(db)
 
         zones = {
             zone_data["slug"]: await get_or_create_zone(db, zone_data)
@@ -251,10 +310,14 @@ async def seed_demo_data() -> None:
             user_data["username"]: await upsert_user(db, user_data)
             for user_data in DEMO_USERS
         }
-        plugins = [
-            await upsert_plugin(db, plugin_data, users, zones, categories)
+        users[settings.INITIAL_ADMIN_USERNAME] = await upsert_root_admin(db)
+        await clear_demo_notifications(db, users)
+        plugins = {
+            plugin_data["slug"]: await upsert_plugin(db, plugin_data, users, zones, categories)
             for plugin_data in DEMO_PLUGINS
-        ]
+        }
+        await seed_reviews(db, users, plugins)
+        await seed_notifications(db, users)
 
         await db.commit()
 
@@ -264,7 +327,7 @@ async def seed_demo_data() -> None:
     for user in DEMO_USERS:
         print(f"  {user['username']} / {DEMO_PASSWORD}")
     print("Plugins:")
-    for plugin in plugins:
+    for plugin in plugins.values():
         print(f"  {plugin.slug} ({plugin.status.value})")
 
     await engine.dispose()

@@ -11,7 +11,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-DEMO_EMAIL_DOMAIN = "demo.local"
+DEMO_EMAIL_DOMAIN = "neko-demo.com"
+LEGACY_DEMO_EMAIL_DOMAINS = ["demo.local"]
 DEMO_PASSWORD = "password123"
 DEMO_PLUGIN_SLUG_PREFIX = "demo-"
 DEMO_REPO_OWNER = "neko-plugin-demo"
@@ -20,6 +21,8 @@ DEMO_REPO_OWNER = "neko-plugin-demo"
 def assert_demo_seed_allowed() -> None:
     """Require an explicit opt-in before mutating local demo data."""
     if os.getenv("DEMO_SEED_ENABLED", "").lower() in {"1", "true", "yes", "on"}:
+        if os.getenv("ENVIRONMENT", "development").lower() == "production":
+            raise SystemExit("Demo seed is blocked while ENVIRONMENT=production.")
         return
 
     raise SystemExit(
@@ -225,5 +228,54 @@ DEMO_PLUGINS = [
         "review_note": "依赖接口已失效，暂时禁用展示。",
         "ai_score": 66,
         "ai_recommendation": "manual_review",
+    },
+]
+
+
+DEMO_REVIEWS = [
+    {
+        "plugin": "demo-weather-helper",
+        "author": "bob",
+        "rating": 5,
+        "title": "提醒稳定",
+        "content": "城市配置和关键词提醒都能跑通，适合测试详情页评论展示。",
+    },
+    {
+        "plugin": "demo-game-lookup",
+        "author": "alice",
+        "rating": 5,
+        "title": "资料很全",
+        "content": "搜索结果和 README 内容足够完整，适合用来测试热门插件。",
+    },
+]
+
+
+DEMO_NOTIFICATIONS = [
+    {
+        "user": "alice",
+        "plugin": "demo-weather-helper",
+        "type": "plugin_review",
+        "title": "天气提醒助手已通过审核",
+        "content": "结构清晰，README 和安装说明完整，允许上架。",
+        "target_url": "/my/plugins",
+        "is_read": False,
+    },
+    {
+        "user": "alice",
+        "plugin": "demo-music-panel",
+        "type": "plugin_review",
+        "title": "音乐点歌面板正在等待审核",
+        "content": "管理员可以在插件审核面板中处理这个待审核样本。",
+        "target_url": "/my/plugins",
+        "is_read": False,
+    },
+    {
+        "user": "bob",
+        "plugin": "demo-unsafe-exec",
+        "type": "plugin_review",
+        "title": "不安全命令执行测试未通过审核",
+        "content": "检测到高风险命令执行入口，请移除 shell 调用并补充权限说明后重新提交。",
+        "target_url": "/my/plugins",
+        "is_read": False,
     },
 ]
