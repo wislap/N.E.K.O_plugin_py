@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { authApi } from "@/services/api";
+import { authApi } from "@/services/auth";
 import { getErrorMessage, notifySuccess, reportError } from "@/lib/error-reporting";
 
 export default function AdminChangePassword() {

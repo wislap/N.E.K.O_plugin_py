@@ -1,4 +1,5 @@
-import { post, request, type LogStats } from "@/services/api";
+import { post, request } from "@/services/http/client";
+import type { LogStats } from "@/services/types";
 
 export function getLogStats() {
   return request<LogStats>("/admin/logs/stats");

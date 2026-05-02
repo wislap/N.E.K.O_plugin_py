@@ -12,7 +12,9 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { authApi, notificationsApi, type Notification, type User as ApiUser } from '@/services/api';
+import { authApi } from '@/services/auth';
+import { notificationsApi } from '@/services/notifications';
+import type { Notification, User as ApiUser } from '@/services/types';
 import { adminApi, hasAnyAdminAccess } from '@/services/adminApi';
 import { logError, reportError } from '@/lib/error-reporting';
 

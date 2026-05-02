@@ -1,10 +1,6 @@
-import {
-  normalizePlugins,
-  post,
-  request,
-  type PaginatedResponse,
-  type Plugin
-} from "@/services/api";
+import { post, request } from "@/services/http/client";
+import type { PaginatedResponse, Plugin } from "@/services/types";
+import { normalizePlugins } from "@/services/utils";
 
 export async function getAllPlugins() {
   const data = await request<Plugin[] | PaginatedResponse<Plugin>>("/admin/plugins?page_size=100");

@@ -14,7 +14,8 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { pluginsApi, type Plugin } from '@/services/api';
+import { pluginsApi } from '@/services/plugins';
+import type { Plugin } from '@/services/types';
 import { listContainer, listItem, softReveal } from '@/lib/animations';
 import { isDebugAuthEnabled } from '@/lib/debug';
 import { getErrorMessage, reportError } from '@/lib/error-reporting';

@@ -1,4 +1,4 @@
-import { del, post, put, request } from "@/services/api";
+import { del, post, put, request } from "@/services/http/client";
 import type { Category, CategoryPayload } from "./types";
 
 export function getCategories() {

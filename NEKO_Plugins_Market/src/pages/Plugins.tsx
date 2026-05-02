@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { zones } from '@/data';
-import { pluginsApi } from '@/services/api';
+import { pluginsApi } from '@/services/plugins';
 import type { Plugin } from '@/types';
 import { listContainer, softReveal } from '@/lib/animations';
 import { getErrorMessage, reportError } from '@/lib/error-reporting';

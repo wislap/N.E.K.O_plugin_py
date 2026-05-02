@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { stats as fallbackStats } from '@/data';
 import { formatNumber } from '@/lib/utils';
 import { isDebugDataEnabled } from '@/lib/debug';
-import { marketApi, type MarketStats } from '@/services/api';
+import { marketApi } from '@/services/market';
+import type { MarketStats } from '@/services/types';
 import { logError } from '@/lib/error-reporting';
 
 const emptyStats: MarketStats = {

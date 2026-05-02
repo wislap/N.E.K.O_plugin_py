@@ -3,11 +3,10 @@ import {
   delWithBody,
   post,
   put,
-  request,
-  roleCodeFromName,
-  toRole,
-  type Role
-} from "@/services/api";
+  request
+} from "@/services/http/client";
+import type { Role } from "@/services/types";
+import { roleCodeFromName, toRole } from "@/services/utils";
 
 type PermissionGroupResponse = {
   id: number;

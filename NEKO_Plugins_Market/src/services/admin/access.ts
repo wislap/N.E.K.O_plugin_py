@@ -1,5 +1,5 @@
 import { adminModules } from "@/lib/adminModules";
-import { request } from "@/services/api";
+import { request } from "@/services/http/client";
 import type { UserPermissions } from "./types";
 
 export function getMyPermissions() {

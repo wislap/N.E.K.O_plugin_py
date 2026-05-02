@@ -1,4 +1,4 @@
-import { post, request } from "@/services/api";
+import { post, request } from "@/services/http/client";
 import type { ServerKeyPair } from "./types";
 
 export function getSignatureKeys() {

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { authApi } from "@/services/api";
+import { authApi } from "@/services/auth";
 import { getErrorMessage, reportError } from "@/lib/error-reporting";
 
 export default function AdminLogin() {

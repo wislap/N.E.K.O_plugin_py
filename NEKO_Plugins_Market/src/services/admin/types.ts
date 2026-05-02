@@ -6,7 +6,7 @@ export type {
   SMTPSettings,
   SystemSetting,
   User
-} from "@/services/api";
+} from "@/services/types";
 
 export interface UserPermissions {
   user_id: number;

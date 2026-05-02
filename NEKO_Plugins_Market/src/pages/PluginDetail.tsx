@@ -21,7 +21,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { formatDate, formatNumber, getZoneById } from '@/lib/utils';
 import { marked } from 'marked';
 import 'highlight.js/styles/github-dark.css';
-import { pluginsApi, reviewsApi } from '@/services/api';
+import { pluginsApi } from '@/services/plugins';
+import { reviewsApi } from '@/services/reviews';
 import type { Plugin, Review } from '@/types';
 import { getErrorMessage, logError, notifySuccess, reportError } from '@/lib/error-reporting';
 

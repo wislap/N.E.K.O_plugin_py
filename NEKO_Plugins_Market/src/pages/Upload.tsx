@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { zones } from '@/data';
-import { pluginsApi } from '@/services/api';
+import { pluginsApi } from '@/services/plugins';
 import { isDebugAuthEnabled } from '@/lib/debug';
 import { getErrorMessage, notifySuccess, reportError } from '@/lib/error-reporting';
 

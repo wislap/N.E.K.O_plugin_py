@@ -18,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { adminModules } from "@/lib/adminModules";
-import { authApi } from "@/services/api";
+import { authApi } from "@/services/auth";
 import {
   adminApi,
   canAccessAdminPermission,

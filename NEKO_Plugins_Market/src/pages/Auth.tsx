@@ -5,7 +5,7 @@ import { Cat, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { authApi } from '@/services/api';
+import { authApi } from '@/services/auth';
 import { softReveal } from '@/lib/animations';
 import { isDebugAuthEnabled } from '@/lib/debug';
 import { getErrorMessage, notifySuccess, reportError } from '@/lib/error-reporting';

@@ -1,4 +1,5 @@
-import { post, put, request, type SMTPSettings, type SystemSetting } from "@/services/api";
+import { post, put, request } from "@/services/http/client";
+import type { SMTPSettings, SystemSetting } from "@/services/types";
 
 export function getSMTPSettings() {
   return request<SMTPSettings>("/admin/settings/smtp");

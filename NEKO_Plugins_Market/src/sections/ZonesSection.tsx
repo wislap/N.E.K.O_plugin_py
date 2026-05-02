@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ZoneCard } from '@/components/ZoneCard';
 import { zones as fallbackZones } from '@/data';
-import { zonesApi } from '@/services/api';
+import { zonesApi } from '@/services/zones';
 import type { Zone } from '@/types';
 import { listContainer } from '@/lib/animations';
 import { isDebugDataEnabled } from '@/lib/debug';

@@ -1,11 +1,10 @@
 import {
   del,
   put,
-  queryString,
-  request,
-  type PaginatedResponse,
-  type User
-} from "@/services/api";
+  request
+} from "@/services/http/client";
+import type { PaginatedResponse, User } from "@/services/types";
+import { queryString } from "@/services/utils";
 
 export function getUsers(params: { q?: string; page?: number; page_size?: number } = {}) {
   const query = queryString(params);

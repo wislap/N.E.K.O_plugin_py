@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight, TrendingUp } from 'lucide-react';
 import { PluginCard } from '@/components/PluginCard';
 import { Button } from '@/components/ui/button';
-import { pluginsApi } from '@/services/api';
+import { pluginsApi } from '@/services/plugins';
 import type { Plugin } from '@/types';
 import { listContainer } from '@/lib/animations';
 
