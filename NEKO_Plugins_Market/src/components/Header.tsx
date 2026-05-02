@@ -13,12 +13,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { authApi, notificationsApi, type Notification, type User as ApiUser } from '@/services/api';
+import { adminApi, hasAnyAdminAccess } from '@/services/adminApi';
 
 export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentUser, setCurrentUser] = useState<ApiUser | null>(null);
+  const [canAccessAdmin, setCanAccessAdmin] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
@@ -76,6 +78,7 @@ export function Header() {
       const token = localStorage.getItem('token');
       if (!token) {
         setCurrentUser(null);
+        setCanAccessAdmin(false);
         return;
       }
 
@@ -89,14 +92,19 @@ export function Header() {
       }
 
       try {
-        const user = await authApi.getCurrentUser();
+        const [user, permissions] = await Promise.all([
+          authApi.getCurrentUser(),
+          adminApi.getMyPermissions().catch(() => null)
+        ]);
         if (isMounted) {
           setCurrentUser(user);
+          setCanAccessAdmin(hasAnyAdminAccess(permissions));
           localStorage.setItem('currentUser', JSON.stringify(user));
         }
       } catch {
         if (isMounted) {
           setCurrentUser(null);
+          setCanAccessAdmin(false);
           localStorage.removeItem('token');
           localStorage.removeItem('refreshToken');
           localStorage.removeItem('currentUser');
@@ -365,7 +373,7 @@ export function Header() {
                     <LogOut className="h-4 w-4" />
                     退出登录
                   </DropdownMenuItem>
-                  {currentUser.is_admin && (
+                  {canAccessAdmin && (
                     <>
                       <DropdownMenuSeparator className="bg-slate-800" />
                       <DropdownMenuItem
@@ -454,7 +462,7 @@ export function Header() {
               </a>
               {currentUser ? (
                 <>
-                  {currentUser.is_admin && (
+                  {canAccessAdmin && (
                     <Link
                       to="/admin"
                       onClick={() => setIsMobileMenuOpen(false)}

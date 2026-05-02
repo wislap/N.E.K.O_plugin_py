@@ -3,12 +3,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 
 from app.core.database import get_db
-from app.core.security import get_current_user, get_current_admin_user
+from app.core.security import PermissionChecker, get_current_user
 from app.schemas.user import User, UserUpdate
 from app.schemas.common import MessageResponse, PaginatedResponse
 from app.models.user import User as UserModel
 
 router = APIRouter()
+require_user_management = PermissionChecker("system:user")
 
 
 @router.get("/users", response_model=PaginatedResponse[User])
@@ -16,7 +17,7 @@ async def list_users(
     q: str | None = Query(None, description="搜索用户名、邮箱或昵称"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    current_user: UserModel = Depends(get_current_admin_user),
+    current_user: UserModel = Depends(require_user_management),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -77,7 +78,7 @@ async def get_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="用户不存在"
         )
-    if user.id != current_user.id and not current_user.is_admin:
+    if user.id != current_user.id and not current_user.has_permission("system:user"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="没有权限查看此用户"
@@ -107,7 +108,8 @@ async def update_user(
             detail="用户不存在"
         )
     
-    if user.id != current_user.id and not current_user.is_admin:
+    has_user_management_permission = current_user.has_permission("system:user")
+    if user.id != current_user.id and not has_user_management_permission:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="没有权限修改此用户"
@@ -115,7 +117,7 @@ async def update_user(
     
     update_dict = update_data.model_dump(exclude_unset=True)
     admin_only_fields = {"username", "email", "is_active", "is_admin"}
-    if not current_user.is_admin:
+    if not has_user_management_permission:
         update_dict = {
             key: value for key, value in update_dict.items()
             if key not in admin_only_fields
@@ -141,7 +143,7 @@ async def update_user(
                 detail="邮箱已存在"
             )
 
-    if current_user.is_admin and user.is_admin:
+    if has_user_management_permission and user.is_admin:
         admin_count = (
             await db.execute(
                 select(func.count(UserModel.id)).where(
@@ -171,7 +173,7 @@ async def update_user(
 @router.delete("/users/{user_id}", response_model=MessageResponse)
 async def delete_user(
     user_id: int,
-    current_user: UserModel = Depends(get_current_admin_user),
+    current_user: UserModel = Depends(require_user_management),
     db: AsyncSession = Depends(get_db)
 ):
     """

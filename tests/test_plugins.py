@@ -3,7 +3,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from tests.conftest import create_test_user
+from tests.conftest import create_test_user, grant_permission
 
 
 pytestmark = pytest.mark.asyncio
@@ -289,6 +289,68 @@ async def test_submit_review_requires_plugin_owner_or_admin(
     )
     assert owner_active_review.status_code == 200
     assert owner_active_review.json()["stage"] == "submitted"
+
+
+async def test_plugin_review_permission_allows_non_admin_reviewer(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    owner = await create_test_user(
+        db_session,
+        username="permission_owner",
+        email="permission-owner@example.com",
+        is_admin=False,
+    )
+    reviewer = await create_test_user(
+        db_session,
+        username="permission_reviewer",
+        email="permission-reviewer@example.com",
+        is_admin=False,
+    )
+    await create_test_user(
+        db_session,
+        username="permission_member",
+        email="permission-member@example.com",
+        is_admin=False,
+    )
+    await grant_permission(db_session, reviewer, "plugin:review")
+
+    owner_token = await login(client, owner.username)
+    reviewer_token = await login(client, reviewer.username)
+    member_token = await login(client, "permission_member")
+
+    create_response = await client.post(
+        "/api/v1/plugins",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={
+            "name": "Permission Reviewed Plugin",
+            "slug": "permission-reviewed-plugin",
+            "description": "Reviewed by plugin:review permission",
+        },
+    )
+    assert create_response.status_code == 201
+    plugin = create_response.json()
+
+    member_list = await client.get(
+        "/api/v1/admin/plugins",
+        headers={"Authorization": f"Bearer {member_token}"},
+    )
+    assert member_list.status_code == 403
+
+    reviewer_list = await client.get(
+        "/api/v1/admin/plugins?status=pending",
+        headers={"Authorization": f"Bearer {reviewer_token}"},
+    )
+    assert reviewer_list.status_code == 200
+    assert reviewer_list.json()["total"] == 1
+
+    approve_response = await client.post(
+        f"/api/v1/plugins/{plugin['id']}/approve",
+        headers={"Authorization": f"Bearer {reviewer_token}"},
+        json={"comment": "审核员权限通过"},
+    )
+    assert approve_response.status_code == 200
+    assert approve_response.json()["status"] == "approved"
 
 
 async def test_debug_auth_allows_plugin_upload_without_token(client: AsyncClient, monkeypatch):

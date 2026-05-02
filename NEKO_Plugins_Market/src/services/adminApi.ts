@@ -29,11 +29,58 @@ export type {
   User
 } from "@/services/api";
 
+export interface UserPermissions {
+  user_id: number;
+  username: string;
+  is_admin: boolean;
+  permissions: string[];
+  groups: string[];
+}
+
+export const adminPermissionCodes = [
+  "plugin:review",
+  "system:user",
+  "system:permission",
+  "system:smtp",
+  "system:settings",
+  "system:logs"
+];
+
+export function canAccessAdminPermission(permissionState: UserPermissions | null, permission?: string) {
+  if (!permissionState) {
+    return false;
+  }
+  if (permissionState.is_admin || permissionState.permissions.includes("*")) {
+    return true;
+  }
+  return !permission || permissionState.permissions.includes(permission);
+}
+
+export function hasAnyAdminAccess(permissionState: UserPermissions | null) {
+  if (!permissionState) {
+    return false;
+  }
+  if (permissionState.is_admin || permissionState.permissions.includes("*")) {
+    return true;
+  }
+  return adminPermissionCodes.some((permission) => permissionState.permissions.includes(permission));
+}
+
 export const adminApi = {
-  async getDashboardStats(): Promise<DashboardStats> {
+  getMyPermissions() {
+    return request<UserPermissions>("/permissions/users/me");
+  },
+
+  async getDashboardStats(permissionState?: UserPermissions | null): Promise<DashboardStats> {
+    const canReadUsers = !permissionState || canAccessAdminPermission(permissionState, "system:user");
+    const canReadPlugins = !permissionState || canAccessAdminPermission(permissionState, "plugin:review");
     const [usersPage, plugins] = await Promise.all([
-      this.getUsers({ page: 1, page_size: 100 }).catch(() => ({ items: [] as User[], total: 0 })),
-      this.getAllPlugins().catch(() => [] as Plugin[])
+      canReadUsers
+        ? this.getUsers({ page: 1, page_size: 100 }).catch(() => ({ items: [] as User[], total: 0 }))
+        : Promise.resolve({ items: [] as User[], total: 0 }),
+      canReadPlugins
+        ? this.getAllPlugins().catch(() => [] as Plugin[])
+        : Promise.resolve([] as Plugin[])
     ]);
     const users = usersPage.items;
 

@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 from typing import List, Optional
 
 from app.core.database import get_db
-from app.core.security import get_current_user, get_current_admin_user
+from app.core.security import PermissionChecker, get_current_user
 from app.models.user import User
 from app.services.permission_service import PermissionService
 from app.schemas.permission import (
@@ -19,6 +19,7 @@ from app.schemas.permission import (
 )
 
 router = APIRouter(prefix="/permissions", tags=["permissions"])
+require_permission_management = PermissionChecker("system:permission")
 
 
 # ========== 权限管理 ==========
@@ -41,7 +42,7 @@ async def list_permissions(
 async def create_permission(
     data: PermissionCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
+    current_user: User = Depends(require_permission_management)
 ):
     """创建新权限（需要权限管理权限）"""
     service = PermissionService()
@@ -76,7 +77,7 @@ async def list_permission_groups(
 async def create_permission_group(
     data: PermissionGroupCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
+    current_user: User = Depends(require_permission_management)
 ):
     """创建权限组"""
     service = PermissionService()
@@ -98,7 +99,7 @@ async def update_permission_group(
     group_id: int,
     data: PermissionGroupUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
+    current_user: User = Depends(require_permission_management)
 ):
     """更新权限组"""
     service = PermissionService()
@@ -118,7 +119,7 @@ async def update_permission_group(
 async def delete_permission_group(
     group_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
+    current_user: User = Depends(require_permission_management)
 ):
     """删除权限组"""
     service = PermissionService()
@@ -134,7 +135,7 @@ async def add_permissions_to_group(
     group_id: int,
     permission_codes: List[str],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
+    current_user: User = Depends(require_permission_management)
 ):
     """向权限组添加权限"""
     service = PermissionService()
@@ -150,7 +151,7 @@ async def remove_permissions_from_group(
     group_id: int,
     permission_codes: List[str],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
+    current_user: User = Depends(require_permission_management)
 ):
     """从权限组移除权限"""
     service = PermissionService()
@@ -166,7 +167,7 @@ async def set_group_inheritance(
     group_id: int,
     inherit_from_ids: List[int],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
+    current_user: User = Depends(require_permission_management)
 ):
     """设置权限组继承关系"""
     service = PermissionService()
@@ -188,7 +189,7 @@ async def assign_groups_to_user(
     user_id: int,
     data: PermissionAssignRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
+    current_user: User = Depends(require_permission_management)
 ):
     """为用户分配权限组"""
     service = PermissionService()
@@ -223,7 +224,7 @@ async def get_my_permissions(
 async def get_user_permissions(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
+    current_user: User = Depends(require_permission_management)
 ):
     """获取指定用户的权限（需要管理员权限）"""
     from sqlalchemy import select

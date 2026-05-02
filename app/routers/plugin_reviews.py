@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
 from app.core.database import get_db
-from app.core.security import get_current_user, get_current_admin_user
+from app.core.security import PermissionChecker, get_current_user
 from app.services.plugin_review_service import PluginReviewService
 from app.services.plugin_service import PluginService
 from app.models.plugin_review import PluginReview
@@ -11,6 +11,7 @@ from app.models.user import User
 
 router = APIRouter()
 review_service = PluginReviewService()
+require_plugin_review = PermissionChecker("plugin:review")
 
 
 async def require_plugin_owner_or_admin(
@@ -64,7 +65,7 @@ async def submit_for_review(
 @router.post("/reviews/{review_id}/start-ai-review", response_model=dict)
 async def start_ai_review(
     review_id: int,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_plugin_review),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -130,7 +131,7 @@ async def manual_review(
     review_id: int,
     decision: str,  # approve/reject/needs_revision
     notes: str,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_plugin_review),
     db: AsyncSession = Depends(get_db)
 ):
     """

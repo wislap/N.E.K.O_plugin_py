@@ -2,7 +2,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import create_test_user
+from tests.conftest import create_test_user, grant_permission
 
 
 pytestmark = pytest.mark.asyncio
@@ -128,6 +128,71 @@ async def test_permission_admin_mutations_require_admin(
     )
     assert groups_response.status_code == 200
     assert groups_response.json()[0]["permissions"][0]["code"] == "plugin:test"
+
+
+async def test_permission_management_permission_allows_non_admin_operator(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    operator = await create_test_user(
+        db_session,
+        "permission_operator",
+        "permission-operator@example.com",
+    )
+    member = await create_test_user(
+        db_session,
+        "permission_target",
+        "permission-target@example.com",
+    )
+    await create_test_user(
+        db_session,
+        "permission_plain",
+        "permission-plain@example.com",
+    )
+    await grant_permission(db_session, operator, "system:permission")
+
+    operator_token = await login(client, operator.username)
+    plain_token = await login(client, "permission_plain")
+
+    permission_payload = {
+        "code": "plugin:operator_test",
+        "name": "操作员测试权限",
+        "category": "plugin",
+    }
+
+    plain_create = await client.post(
+        "/api/v1/permissions/create",
+        headers={"Authorization": f"Bearer {plain_token}"},
+        json=permission_payload,
+    )
+    assert plain_create.status_code == 403
+
+    operator_create = await client.post(
+        "/api/v1/permissions/create",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json=permission_payload,
+    )
+    assert operator_create.status_code == 200
+
+    group_response = await client.post(
+        "/api/v1/permissions/groups/create",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json={
+            "code": "operator_reviewers",
+            "name": "操作员审核组",
+            "permission_codes": ["plugin:operator_test"],
+        },
+    )
+    assert group_response.status_code == 200
+    group_id = group_response.json()["id"]
+
+    assign_response = await client.post(
+        f"/api/v1/permissions/users/{member.id}/assign",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json={"group_ids": [group_id]},
+    )
+    assert assign_response.status_code == 200
+    assert assign_response.json()["user"] == member.username
 
 
 async def test_settings_and_logs_require_permissions(

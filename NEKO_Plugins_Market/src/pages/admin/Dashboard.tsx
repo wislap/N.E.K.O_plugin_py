@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Users,
   Puzzle,
@@ -10,17 +11,12 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { adminApi } from "@/services/adminApi";
-
-interface DashboardStats {
-  totalUsers: number;
-  totalPlugins: number;
-  pendingPlugins: number;
-  approvedPlugins: number;
-  rejectedPlugins: number;
-  recentUsers: number;
-  recentPlugins: number;
-}
+import {
+  adminApi,
+  canAccessAdminPermission,
+  type DashboardStats,
+  type UserPermissions
+} from "@/services/adminApi";
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats>({
@@ -32,6 +28,7 @@ export default function AdminDashboard() {
     recentUsers: 0,
     recentPlugins: 0
   });
+  const [permissions, setPermissions] = useState<UserPermissions | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -41,7 +38,9 @@ export default function AdminDashboard() {
   const fetchStats = async () => {
     try {
       setIsLoading(true);
-      const data = await adminApi.getDashboardStats();
+      const permissionState = await adminApi.getMyPermissions();
+      setPermissions(permissionState);
+      const data = await adminApi.getDashboardStats(permissionState);
       setStats(data);
     } catch (error) {
       console.error("获取统计数据失败:", error);
@@ -50,6 +49,13 @@ export default function AdminDashboard() {
     }
   };
 
+  const canReviewPlugins = canAccessAdminPermission(permissions, "plugin:review");
+  const canManageUsers = canAccessAdminPermission(permissions, "system:user");
+  const canManagePermissions = canAccessAdminPermission(permissions, "system:permission");
+  const canManageSmtp = canAccessAdminPermission(permissions, "system:smtp");
+  const canManageSettings = canAccessAdminPermission(permissions, "system:settings");
+  const canViewLogs = canAccessAdminPermission(permissions, "system:logs");
+
   const statCards = [
     {
       title: "总用户数",
@@ -57,7 +63,8 @@ export default function AdminDashboard() {
       icon: Users,
       trend: `+${stats.recentUsers} 本周新增`,
       color: "text-blue-500",
-      bgColor: "bg-blue-500/10"
+      bgColor: "bg-blue-500/10",
+      visible: canManageUsers
     },
     {
       title: "插件总数",
@@ -65,7 +72,8 @@ export default function AdminDashboard() {
       icon: Puzzle,
       trend: `+${stats.recentPlugins} 本周新增`,
       color: "text-purple-500",
-      bgColor: "bg-purple-500/10"
+      bgColor: "bg-purple-500/10",
+      visible: canReviewPlugins
     },
     {
       title: "待审核插件",
@@ -73,7 +81,8 @@ export default function AdminDashboard() {
       icon: Clock,
       trend: "需要处理",
       color: "text-yellow-500",
-      bgColor: "bg-yellow-500/10"
+      bgColor: "bg-yellow-500/10",
+      visible: canReviewPlugins
     },
     {
       title: "已通过插件",
@@ -81,13 +90,58 @@ export default function AdminDashboard() {
       icon: CheckCircle,
       trend: "已上线",
       color: "text-green-500",
-      bgColor: "bg-green-500/10"
+      bgColor: "bg-green-500/10",
+      visible: canReviewPlugins
     }
-  ];
+  ].filter((card) => card.visible);
+
+  const quickActions = [
+    {
+      title: "审核待处理插件",
+      href: "/admin/plugins",
+      value: `${stats.pendingPlugins} 个待审`,
+      icon: Clock,
+      color: "text-yellow-500",
+      visible: canReviewPlugins
+    },
+    {
+      title: "管理用户",
+      href: "/admin/users",
+      value: `${stats.totalUsers} 个用户`,
+      icon: Users,
+      color: "text-blue-500",
+      visible: canManageUsers
+    },
+    {
+      title: "权限配置",
+      href: "/admin/permissions",
+      value: "角色与权限组",
+      icon: Shield,
+      color: "text-primary",
+      visible: canManagePermissions
+    },
+    {
+      title: "查看系统日志",
+      href: "/admin/logs",
+      value: "实时监控",
+      icon: AlertTriangle,
+      color: "text-orange-500",
+      visible: canViewLogs
+    }
+  ].filter((action) => action.visible);
+
+  const statusItems = [
+    { title: "插件审核服务", visible: canReviewPlugins },
+    { title: "权限系统", visible: canManagePermissions },
+    { title: "邮件服务", visible: canManageSmtp },
+    { title: "系统配置", visible: canManageSettings },
+    { title: "日志服务", visible: canViewLogs }
+  ].filter((item) => item.visible);
 
   return (
     <div className="space-y-6">
       {/* 统计卡片 */}
+      {statCards.length > 0 && (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statCards.map((card, index) => {
           const Icon = card.icon;
@@ -113,9 +167,11 @@ export default function AdminDashboard() {
           );
         })}
       </div>
+      )}
 
       {/* 快捷操作 */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {quickActions.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -124,45 +180,29 @@ export default function AdminDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <a
-              href="#/admin/plugins"
-              className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <Clock className="h-4 w-4 text-yellow-500" />
-                <span>审核待处理插件</span>
-              </div>
-              <span className="text-sm text-muted-foreground">
-                {stats.pendingPlugins} 个待审
-              </span>
-            </a>
-            <a
-              href="#/admin/users"
-              className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <Users className="h-4 w-4 text-blue-500" />
-                <span>管理用户</span>
-              </div>
-              <span className="text-sm text-muted-foreground">
-                {stats.totalUsers} 个用户
-              </span>
-            </a>
-            <a
-              href="#/admin/logs"
-              className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="h-4 w-4 text-orange-500" />
-                <span>查看系统日志</span>
-              </div>
-              <span className="text-sm text-muted-foreground">
-                实时监控
-              </span>
-            </a>
+            {quickActions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <Link
+                  key={action.href}
+                  to={action.href}
+                  className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon className={`h-4 w-4 ${action.color}`} />
+                    <span>{action.title}</span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    {action.value}
+                  </span>
+                </Link>
+              );
+            })}
           </CardContent>
         </Card>
+        )}
 
+        {statusItems.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -171,37 +211,20 @@ export default function AdminDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm">AI 审核服务</span>
-              <span className="flex items-center gap-1 text-sm text-green-500">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
-                正常运行
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm">签名服务</span>
-              <span className="flex items-center gap-1 text-sm text-green-500">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
-                正常运行
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm">邮件服务</span>
-              <span className="flex items-center gap-1 text-sm text-green-500">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
-                正常运行
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm">GitHub API</span>
-              <span className="flex items-center gap-1 text-sm text-green-500">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
-                连接正常
-              </span>
-            </div>
+            {statusItems.map((item) => (
+              <div key={item.title} className="flex items-center justify-between">
+                <span className="text-sm">{item.title}</span>
+                <span className="flex items-center gap-1 text-sm text-green-500">
+                  <span className="h-2 w-2 rounded-full bg-green-500" />
+                  可用
+                </span>
+              </div>
+            ))}
           </CardContent>
         </Card>
+        )}
 
+        {canReviewPlugins && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -260,6 +283,7 @@ export default function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
     </div>
   );

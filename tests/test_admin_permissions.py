@@ -2,7 +2,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import create_test_user
+from tests.conftest import create_test_user, grant_permission
 
 
 pytestmark = pytest.mark.asyncio
@@ -117,6 +117,56 @@ async def test_user_admin_safety_guards(
         json={"is_admin": False},
     )
     assert demote_original_admin.status_code == 200
+
+
+async def test_user_management_permission_allows_non_admin_operator(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    operator = await create_test_user(
+        db_session,
+        username="user_operator",
+        email="user-operator@example.com",
+        is_admin=False,
+    )
+    target = await create_test_user(
+        db_session,
+        username="managed_member",
+        email="managed-member@example.com",
+        is_admin=False,
+    )
+    await create_test_user(
+        db_session,
+        username="plain_member",
+        email="plain-member@example.com",
+        is_admin=False,
+    )
+    await grant_permission(db_session, operator, "system:user")
+
+    operator_token = await login(client, operator.username)
+    plain_token = await login(client, "plain_member")
+
+    plain_list = await client.get(
+        "/api/v1/users",
+        headers={"Authorization": f"Bearer {plain_token}"},
+    )
+    assert plain_list.status_code == 403
+
+    operator_list = await client.get(
+        "/api/v1/users",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+    assert operator_list.status_code == 200
+    assert operator_list.json()["total"] == 3
+
+    update_response = await client.put(
+        f"/api/v1/users/{target.id}",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json={"is_active": False, "username": "managed_member_disabled"},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["is_active"] is False
+    assert update_response.json()["username"] == "managed_member_disabled"
 
 
 async def test_category_mutations_require_admin(

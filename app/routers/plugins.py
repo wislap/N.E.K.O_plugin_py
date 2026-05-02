@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List
 
 from app.core.database import get_db
-from app.core.security import get_current_user, get_current_admin_user
+from app.core.security import PermissionChecker, get_current_user
 from app.models.user import User
 from app.schemas.plugin import (
     PluginCreate, PluginUpdate, PluginList, PluginDetail,
@@ -16,6 +16,7 @@ from app.services.plugin_review_service import PluginReviewService
 from app.models.plugin import PluginStatus
 
 router = APIRouter()
+require_plugin_review = PermissionChecker("plugin:review")
 
 
 class PluginReviewDecisionRequest(BaseModel):
@@ -71,7 +72,7 @@ async def list_admin_plugins(
     featured_only: bool = Query(False, description="仅显示推荐插件"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_plugin_review),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -260,7 +261,7 @@ async def delete_plugin(
 async def approve_plugin(
     plugin_id: int,
     decision: Optional[PluginReviewDecisionRequest] = None,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_plugin_review),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -288,7 +289,7 @@ async def approve_plugin(
 async def reject_plugin(
     plugin_id: int,
     decision: Optional[PluginReviewDecisionRequest] = None,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_plugin_review),
     db: AsyncSession = Depends(get_db)
 ):
     """
