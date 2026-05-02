@@ -3,13 +3,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 
 from app.core.database import get_db
-from app.core.security import get_current_user, get_current_admin_user
+from app.core.security import PermissionChecker, get_current_user
 from app.services.signature_service import SignatureService
 from app.models.user import User
 from app.schemas.common import MessageResponse
 
 router = APIRouter()
 signature_service = SignatureService()
+require_signature_management = PermissionChecker("plugin:signature")
 
 
 # ========== 公钥管理（管理员） ==========
@@ -18,7 +19,7 @@ signature_service = SignatureService()
 async def create_keypair(
     name: str,
     set_as_default: bool = False,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_signature_management),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -44,7 +45,7 @@ async def create_keypair(
 
 @router.get("/admin/keys", response_model=List[dict])
 async def list_keypairs(
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_signature_management),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -74,7 +75,7 @@ async def list_keypairs(
 @router.post("/admin/keys/{keypair_id}/deactivate", response_model=MessageResponse)
 async def deactivate_keypair(
     keypair_id: int,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_signature_management),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -132,7 +133,7 @@ async def get_default_public_key(
 async def sign_plugin(
     plugin_id: int,
     keypair_id: Optional[int] = None,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_signature_management),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -241,7 +242,7 @@ async def get_signature_by_version(
 async def revoke_signature(
     signature_id: int,
     reason: str,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_signature_management),
     db: AsyncSession = Depends(get_db)
 ):
     """

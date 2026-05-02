@@ -19,6 +19,9 @@ import AdminSMTP from '@/pages/admin/SMTP';
 import AdminSettings from '@/pages/admin/Settings';
 import AdminLogs from '@/pages/admin/Logs';
 import AdminChangePassword from '@/pages/admin/ChangePassword';
+import AdminCategories from '@/pages/admin/Categories';
+import AdminZones from '@/pages/admin/Zones';
+import AdminSignatures from '@/pages/admin/Signatures';
 
 function MainLayout() {
   const location = useLocation();
@@ -36,6 +39,9 @@ function MainLayout() {
           <Route path="smtp" element={<AdminSMTP />} />
           <Route path="settings" element={<AdminSettings />} />
           <Route path="logs" element={<AdminLogs />} />
+          <Route path="categories" element={<AdminCategories />} />
+          <Route path="zones" element={<AdminZones />} />
+          <Route path="signatures" element={<AdminSignatures />} />
           <Route path="change-password" element={<AdminChangePassword />} />
         </Route>
       </Routes>

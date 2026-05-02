@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
-from app.routers import plugins, categories, users, reviews, versions, auth, plugin_reviews, signatures, zones, permissions, logs, notifications, admin_settings
+from app.routers import plugins, categories, users, reviews, versions, auth, plugin_reviews, signatures, zones, permissions, logs, notifications, admin_settings, admin_dashboard
 from app.services.bootstrap_service import BootstrapService
 from app.services.permission_service import PermissionService
 
@@ -57,6 +57,7 @@ app.include_router(permissions.router, prefix="/api/v1", tags=["permissions"])
 app.include_router(logs.router, prefix="/api/v1", tags=["logs"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
 app.include_router(admin_settings.router, prefix="/api/v1/admin", tags=["admin-settings"])
+app.include_router(admin_dashboard.router, prefix="/api/v1", tags=["admin-dashboard"])
 
 
 @app.get("/")

@@ -3,12 +3,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
 from app.core.database import get_db
-from app.core.security import get_current_user, get_current_admin_user
+from app.core.security import PermissionChecker
 from app.services.zone_service import ZoneService
 from app.models.user import User
 from app.schemas.common import MessageResponse
 
 router = APIRouter()
+require_zone_management = PermissionChecker("plugin:zone")
 
 
 @router.get("/zones", response_model=List[dict])
@@ -74,6 +75,31 @@ async def get_zone_plugins(
     return [p.to_frontend_dict() for p in plugins]
 
 
+@router.get("/admin/zones", response_model=List[dict])
+async def list_admin_zones(
+    current_user: User = Depends(require_zone_management),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    获取后台分区列表，包含数据库 ID 供编辑和删除使用。
+    """
+    zones = await ZoneService.get_zones(db)
+    return [
+        {
+            "id": zone.id,
+            "name": zone.name,
+            "slug": zone.slug,
+            "description": zone.description,
+            "icon": zone.icon,
+            "color": zone.color,
+            "sort_order": zone.sort_order,
+            "created_at": zone.created_at,
+            "updated_at": zone.updated_at,
+        }
+        for zone in zones
+    ]
+
+
 @router.post("/admin/zones", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_zone(
     name: str,
@@ -82,7 +108,7 @@ async def create_zone(
     icon: str = None,
     color: str = None,
     sort_order: int = 0,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_zone_management),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -117,7 +143,7 @@ async def update_zone(
     icon: str = None,
     color: str = None,
     sort_order: int = None,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_zone_management),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -144,7 +170,7 @@ async def update_zone(
 @router.delete("/admin/zones/{zone_id}", response_model=MessageResponse)
 async def delete_zone(
     zone_id: int,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_zone_management),
     db: AsyncSession = Depends(get_db)
 ):
     """

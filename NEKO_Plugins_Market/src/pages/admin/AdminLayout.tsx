@@ -8,12 +8,16 @@ import {
   Mail,
   FileText,
   Puzzle,
+  FolderTree,
+  Layers3,
+  KeyRound,
   LogOut,
   Menu,
   ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { adminModules } from "@/lib/adminModules";
 import { authApi } from "@/services/api";
 import {
   adminApi,
@@ -23,15 +27,23 @@ import {
   type User as ApiUser
 } from "@/services/adminApi";
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "仪表盘", path: "/admin" },
-  { icon: Puzzle, label: "插件审核", path: "/admin/plugins", permission: "plugin:review" },
-  { icon: Users, label: "用户管理", path: "/admin/users", permission: "system:user" },
-  { icon: Shield, label: "权限管理", path: "/admin/permissions", permission: "system:permission" },
-  { icon: Mail, label: "SMTP设置", path: "/admin/smtp", permission: "system:smtp" },
-  { icon: Settings, label: "系统设置", path: "/admin/settings", permission: "system:settings" },
-  { icon: FileText, label: "日志查看", path: "/admin/logs", permission: "system:logs" },
-];
+const menuIcons = {
+  dashboard: LayoutDashboard,
+  plugins: Puzzle,
+  users: Users,
+  permissions: Shield,
+  smtp: Mail,
+  settings: Settings,
+  logs: FileText,
+  categories: FolderTree,
+  zones: Layers3,
+  signatures: KeyRound
+};
+
+const menuItems = adminModules.map((module) => ({
+  ...module,
+  icon: menuIcons[module.key as keyof typeof menuIcons] ?? LayoutDashboard
+})).filter((module) => module.visible !== false);
 
 export default function AdminLayout() {
   const location = useLocation();

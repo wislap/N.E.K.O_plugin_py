@@ -5,7 +5,6 @@ import {
   post,
   put,
   queryString,
-  recentCount,
   request,
   roleCodeFromName,
   toRole,
@@ -18,6 +17,7 @@ import {
   type SystemSetting,
   type User
 } from "@/services/api";
+import { adminModules } from "@/lib/adminModules";
 
 export type {
   DashboardStats,
@@ -37,14 +37,43 @@ export interface UserPermissions {
   groups: string[];
 }
 
-export const adminPermissionCodes = [
-  "plugin:review",
-  "system:user",
-  "system:permission",
-  "system:smtp",
-  "system:settings",
-  "system:logs"
-];
+export interface Category {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string | null;
+  icon?: string | null;
+  sort_order: number;
+  plugin_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ZoneAdminItem {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string | null;
+  icon?: string | null;
+  color?: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ServerKeyPair {
+  id: number;
+  name: string;
+  public_key: string;
+  is_default: boolean;
+  is_active: boolean;
+  created_at: string;
+  activated_at?: string | null;
+  deactivated_at?: string | null;
+}
+
+export type CategoryPayload = Omit<Category, "id" | "plugin_count" | "created_at" | "updated_at">;
+export type ZonePayload = Omit<ZoneAdminItem, "id" | "created_at" | "updated_at">;
 
 export function canAccessAdminPermission(permissionState: UserPermissions | null, permission?: string) {
   if (!permissionState) {
@@ -57,13 +86,7 @@ export function canAccessAdminPermission(permissionState: UserPermissions | null
 }
 
 export function hasAnyAdminAccess(permissionState: UserPermissions | null) {
-  if (!permissionState) {
-    return false;
-  }
-  if (permissionState.is_admin || permissionState.permissions.includes("*")) {
-    return true;
-  }
-  return adminPermissionCodes.some((permission) => permissionState.permissions.includes(permission));
+  return adminModules.some((module) => canAccessAdminPermission(permissionState, module.permission));
 }
 
 export const adminApi = {
@@ -71,28 +94,8 @@ export const adminApi = {
     return request<UserPermissions>("/permissions/users/me");
   },
 
-  async getDashboardStats(permissionState?: UserPermissions | null): Promise<DashboardStats> {
-    const canReadUsers = !permissionState || canAccessAdminPermission(permissionState, "system:user");
-    const canReadPlugins = !permissionState || canAccessAdminPermission(permissionState, "plugin:review");
-    const [usersPage, plugins] = await Promise.all([
-      canReadUsers
-        ? this.getUsers({ page: 1, page_size: 100 }).catch(() => ({ items: [] as User[], total: 0 }))
-        : Promise.resolve({ items: [] as User[], total: 0 }),
-      canReadPlugins
-        ? this.getAllPlugins().catch(() => [] as Plugin[])
-        : Promise.resolve([] as Plugin[])
-    ]);
-    const users = usersPage.items;
-
-    return {
-      totalUsers: usersPage.total,
-      totalPlugins: plugins.length,
-      pendingPlugins: plugins.filter((plugin) => plugin.status === "pending").length,
-      approvedPlugins: plugins.filter((plugin) => plugin.status === "approved").length,
-      rejectedPlugins: plugins.filter((plugin) => plugin.status === "rejected").length,
-      recentUsers: recentCount(users),
-      recentPlugins: recentCount(plugins)
-    };
+  getDashboardStats(): Promise<DashboardStats> {
+    return request<DashboardStats>("/admin/dashboard/stats");
   },
 
   getUsers(params: { q?: string; page?: number; page_size?: number } = {}) {
@@ -111,6 +114,57 @@ export const adminApi = {
 
   deleteUser(userId: number) {
     return del<{ message: string }>(`/users/${userId}`);
+  },
+
+  getCategories() {
+    return request<Category[]>("/categories?with_count=true");
+  },
+
+  createCategory(data: CategoryPayload) {
+    return post<Category>("/categories", data);
+  },
+
+  updateCategory(categoryId: number, data: Partial<CategoryPayload>) {
+    return put<Category>(`/categories/${categoryId}`, data);
+  },
+
+  deleteCategory(categoryId: number) {
+    return del<{ message: string }>(`/categories/${categoryId}`);
+  },
+
+  getAdminZones() {
+    return request<ZoneAdminItem[]>("/admin/zones");
+  },
+
+  createZone(data: ZonePayload) {
+    const query = queryString(data);
+    return post<ZoneAdminItem & { message: string }>(`/admin/zones${query}`);
+  },
+
+  updateZone(zoneId: number, data: Partial<Omit<ZonePayload, "slug">>) {
+    const query = queryString(data);
+    return put<ZoneAdminItem & { message: string }>(`/admin/zones/${zoneId}${query}`, {});
+  },
+
+  deleteZone(zoneId: number) {
+    return del<{ message: string }>(`/admin/zones/${zoneId}`);
+  },
+
+  getSignatureKeys() {
+    return request<ServerKeyPair[]>("/signatures/admin/keys");
+  },
+
+  getDefaultPublicKey() {
+    return request<ServerKeyPair>("/signatures/public-keys/default");
+  },
+
+  createSignatureKey(name: string, setAsDefault: boolean) {
+    const query = queryString({ name, set_as_default: setAsDefault });
+    return post<ServerKeyPair & { message: string }>(`/signatures/admin/keys${query}`);
+  },
+
+  deactivateSignatureKey(keypairId: number) {
+    return post<{ message: string }>(`/signatures/admin/keys/${keypairId}/deactivate`);
   },
 
   async getAllPlugins() {

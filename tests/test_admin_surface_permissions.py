@@ -2,6 +2,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.plugin import Plugin, PluginStatus
 from tests.conftest import create_test_user, grant_permission
 
 
@@ -59,6 +60,87 @@ async def test_zone_admin_endpoints_require_admin(
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert admin_delete.status_code == 200
+
+
+async def test_zone_management_permission_allows_non_admin_operator(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    operator = await create_test_user(db_session, "zone_operator", "zone-operator@example.com")
+    await create_test_user(db_session, "zone_plain", "zone-plain@example.com")
+    await grant_permission(db_session, operator, "plugin:zone")
+
+    operator_token = await login(client, operator.username)
+    plain_token = await login(client, "zone_plain")
+
+    plain_create = await client.post(
+        "/api/v1/admin/zones",
+        headers={"Authorization": f"Bearer {plain_token}"},
+        params={
+            "name": "普通用户分区",
+            "slug": "plain-zone",
+        },
+    )
+    assert plain_create.status_code == 403
+
+    plain_list = await client.get(
+        "/api/v1/admin/zones",
+        headers={"Authorization": f"Bearer {plain_token}"},
+    )
+    assert plain_list.status_code == 403
+
+    operator_create = await client.post(
+        "/api/v1/admin/zones",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        params={
+            "name": "权限分区",
+            "slug": "operator-zone",
+            "description": "由分区管理员创建",
+        },
+    )
+    assert operator_create.status_code == 201
+    assert operator_create.json()["slug"] == "operator-zone"
+
+    operator_list = await client.get(
+        "/api/v1/admin/zones",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+    assert operator_list.status_code == 200
+    assert operator_list.json()[0]["id"] == operator_create.json()["id"]
+
+
+async def test_category_management_permission_allows_non_admin_operator(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    operator = await create_test_user(db_session, "category_operator", "category-operator@example.com")
+    await create_test_user(db_session, "category_plain", "category-plain@example.com")
+    await grant_permission(db_session, operator, "plugin:category")
+
+    operator_token = await login(client, operator.username)
+    plain_token = await login(client, "category_plain")
+
+    plain_create = await client.post(
+        "/api/v1/categories",
+        headers={"Authorization": f"Bearer {plain_token}"},
+        json={
+            "name": "普通分类",
+            "slug": "plain-category",
+        },
+    )
+    assert plain_create.status_code == 403
+
+    operator_create = await client.post(
+        "/api/v1/categories",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json={
+            "name": "权限分类",
+            "slug": "operator-category",
+            "description": "由分类管理员创建",
+        },
+    )
+    assert operator_create.status_code == 201
+    assert operator_create.json()["slug"] == "operator-category"
 
 
 async def test_permission_admin_mutations_require_admin(
@@ -252,6 +334,39 @@ async def test_settings_and_logs_require_permissions(
     assert admin_logs.status_code == 200
 
 
+async def test_signature_management_permission_allows_non_admin_operator(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    operator = await create_test_user(db_session, "signature_operator", "signature-operator@example.com")
+    await create_test_user(db_session, "signature_plain", "signature-plain@example.com")
+    await grant_permission(db_session, operator, "plugin:signature")
+
+    operator_token = await login(client, operator.username)
+    plain_token = await login(client, "signature_plain")
+
+    plain_keys = await client.get(
+        "/api/v1/signatures/admin/keys",
+        headers={"Authorization": f"Bearer {plain_token}"},
+    )
+    assert plain_keys.status_code == 403
+
+    operator_create = await client.post(
+        "/api/v1/signatures/admin/keys",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        params={"name": "测试签名密钥", "set_as_default": True},
+    )
+    assert operator_create.status_code == 201
+    assert operator_create.json()["name"] == "测试签名密钥"
+
+    operator_keys = await client.get(
+        "/api/v1/signatures/admin/keys",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+    assert operator_keys.status_code == 200
+    assert operator_keys.json()[0]["name"] == "测试签名密钥"
+
+
 async def test_permission_group_grants_non_admin_access(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -311,3 +426,85 @@ async def test_permission_group_grants_non_admin_access(
         headers={"Authorization": f"Bearer {member_token}"},
     )
     assert logs_response.status_code == 200
+
+
+async def test_dashboard_stats_are_scoped_by_permission(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    owner = await create_test_user(db_session, "dash_owner", "dash-owner@example.com")
+    reviewer = await create_test_user(db_session, "dash_reviewer", "dash-reviewer@example.com")
+    user_operator = await create_test_user(db_session, "dash_user_operator", "dash-users@example.com")
+    await create_test_user(db_session, "dash_plain", "dash-plain@example.com")
+    await create_test_user(db_session, "dash_admin", "dash-admin@example.com", is_admin=True)
+    await grant_permission(db_session, reviewer, "plugin:review")
+    await grant_permission(db_session, user_operator, "system:user")
+
+    db_session.add_all([
+        Plugin(
+            name="Pending Dashboard Plugin",
+            slug="pending-dashboard-plugin",
+            author_id=owner.id,
+            author_name=owner.username,
+            version="1.0.0",
+            status=PluginStatus.PENDING,
+        ),
+        Plugin(
+            name="Approved Dashboard Plugin",
+            slug="approved-dashboard-plugin",
+            author_id=owner.id,
+            author_name=owner.username,
+            version="1.0.0",
+            status=PluginStatus.APPROVED,
+        ),
+        Plugin(
+            name="Rejected Dashboard Plugin",
+            slug="rejected-dashboard-plugin",
+            author_id=owner.id,
+            author_name=owner.username,
+            version="1.0.0",
+            status=PluginStatus.REJECTED,
+        ),
+    ])
+    await db_session.commit()
+
+    plain_token = await login(client, "dash_plain")
+    reviewer_token = await login(client, reviewer.username)
+    user_operator_token = await login(client, user_operator.username)
+    admin_token = await login(client, "dash_admin")
+
+    plain_response = await client.get(
+        "/api/v1/admin/dashboard/stats",
+        headers={"Authorization": f"Bearer {plain_token}"},
+    )
+    assert plain_response.status_code == 403
+
+    reviewer_response = await client.get(
+        "/api/v1/admin/dashboard/stats",
+        headers={"Authorization": f"Bearer {reviewer_token}"},
+    )
+    assert reviewer_response.status_code == 200
+    reviewer_stats = reviewer_response.json()
+    assert reviewer_stats["totalUsers"] == 0
+    assert reviewer_stats["totalPlugins"] == 3
+    assert reviewer_stats["pendingPlugins"] == 1
+    assert reviewer_stats["approvedPlugins"] == 1
+    assert reviewer_stats["rejectedPlugins"] == 1
+
+    user_operator_response = await client.get(
+        "/api/v1/admin/dashboard/stats",
+        headers={"Authorization": f"Bearer {user_operator_token}"},
+    )
+    assert user_operator_response.status_code == 200
+    user_stats = user_operator_response.json()
+    assert user_stats["totalUsers"] == 5
+    assert user_stats["totalPlugins"] == 0
+
+    admin_response = await client.get(
+        "/api/v1/admin/dashboard/stats",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert admin_response.status_code == 200
+    admin_stats = admin_response.json()
+    assert admin_stats["totalUsers"] == 5
+    assert admin_stats["totalPlugins"] == 3

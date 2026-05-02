@@ -3,13 +3,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
 from app.core.database import get_db
-from app.core.security import get_current_admin_user
+from app.core.security import PermissionChecker
 from app.models.user import User
 from app.schemas.category import Category, CategoryCreate, CategoryUpdate
 from app.schemas.common import MessageResponse
 from app.services.category_service import CategoryService
 
 router = APIRouter()
+require_category_management = PermissionChecker("plugin:category")
 
 
 @router.get("/categories", response_model=List[Category])
@@ -64,7 +65,7 @@ async def get_category_by_slug(
 @router.post("/categories", response_model=Category, status_code=status.HTTP_201_CREATED)
 async def create_category(
     category_data: CategoryCreate,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_category_management),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -84,7 +85,7 @@ async def create_category(
 async def update_category(
     category_id: int,
     update_data: CategoryUpdate,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_category_management),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -104,7 +105,7 @@ async def update_category(
 @router.delete("/categories/{category_id}", response_model=MessageResponse)
 async def delete_category(
     category_id: int,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_category_management),
     db: AsyncSession = Depends(get_db)
 ):
     """

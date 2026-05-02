@@ -17,6 +17,11 @@ import {
   type DashboardStats,
   type UserPermissions
 } from "@/services/adminApi";
+import { adminModules } from "@/lib/adminModules";
+
+const adminModuleByKey = Object.fromEntries(
+  adminModules.map((module) => [module.key, module])
+);
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats>({
@@ -40,7 +45,7 @@ export default function AdminDashboard() {
       setIsLoading(true);
       const permissionState = await adminApi.getMyPermissions();
       setPermissions(permissionState);
-      const data = await adminApi.getDashboardStats(permissionState);
+      const data = await adminApi.getDashboardStats();
       setStats(data);
     } catch (error) {
       console.error("获取统计数据失败:", error);
@@ -55,6 +60,9 @@ export default function AdminDashboard() {
   const canManageSmtp = canAccessAdminPermission(permissions, "system:smtp");
   const canManageSettings = canAccessAdminPermission(permissions, "system:settings");
   const canViewLogs = canAccessAdminPermission(permissions, "system:logs");
+  const canManageCategories = canAccessAdminPermission(permissions, "plugin:category");
+  const canManageZones = canAccessAdminPermission(permissions, "plugin:zone");
+  const canManageSignatures = canAccessAdminPermission(permissions, "plugin:signature");
 
   const statCards = [
     {
@@ -97,32 +105,32 @@ export default function AdminDashboard() {
 
   const quickActions = [
     {
-      title: "审核待处理插件",
-      href: "/admin/plugins",
+      title: adminModuleByKey.plugins.label,
+      href: adminModuleByKey.plugins.path,
       value: `${stats.pendingPlugins} 个待审`,
       icon: Clock,
       color: "text-yellow-500",
       visible: canReviewPlugins
     },
     {
-      title: "管理用户",
-      href: "/admin/users",
+      title: adminModuleByKey.users.label,
+      href: adminModuleByKey.users.path,
       value: `${stats.totalUsers} 个用户`,
       icon: Users,
       color: "text-blue-500",
       visible: canManageUsers
     },
     {
-      title: "权限配置",
-      href: "/admin/permissions",
+      title: adminModuleByKey.permissions.label,
+      href: adminModuleByKey.permissions.path,
       value: "角色与权限组",
       icon: Shield,
       color: "text-primary",
       visible: canManagePermissions
     },
     {
-      title: "查看系统日志",
-      href: "/admin/logs",
+      title: adminModuleByKey.logs.label,
+      href: adminModuleByKey.logs.path,
       value: "实时监控",
       icon: AlertTriangle,
       color: "text-orange-500",
@@ -135,7 +143,10 @@ export default function AdminDashboard() {
     { title: "权限系统", visible: canManagePermissions },
     { title: "邮件服务", visible: canManageSmtp },
     { title: "系统配置", visible: canManageSettings },
-    { title: "日志服务", visible: canViewLogs }
+    { title: "日志服务", visible: canViewLogs },
+    { title: "分类配置", visible: canManageCategories },
+    { title: "分区配置", visible: canManageZones },
+    { title: "签名服务", visible: canManageSignatures }
   ].filter((item) => item.visible);
 
   return (

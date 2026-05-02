@@ -33,6 +33,9 @@ class PermissionService:
         # 插件权限
         'plugin:review': {'name': '插件审核', 'category': 'plugin'},
         'plugin:manage': {'name': '插件管理', 'category': 'plugin'},
+        'plugin:category': {'name': '插件分类管理', 'category': 'plugin'},
+        'plugin:zone': {'name': '插件分区管理', 'category': 'plugin'},
+        'plugin:signature': {'name': '插件签名管理', 'category': 'plugin'},
         'plugin:submit_logs': {'name': '插件提交日志查看', 'category': 'plugin'},
         'plugin:ai_review': {'name': 'AI审核内容管理', 'category': 'plugin'},
         
@@ -60,7 +63,9 @@ class PermissionService:
             'description': '管理插件相关功能',
             'is_system': True,
             'permissions': [
-                'plugin:review', 'plugin:manage', 'plugin:submit_logs', 'plugin:ai_review'
+                'plugin:review', 'plugin:manage', 'plugin:category',
+                'plugin:zone', 'plugin:signature', 'plugin:submit_logs',
+                'plugin:ai_review'
             ]
         },
         'ai_admin': {
