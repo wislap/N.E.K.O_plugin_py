@@ -55,7 +55,7 @@ async def test_reviews_require_login_and_owner_for_mutations(
     assert pending_create.status_code == 404
 
     approve_response = await client.post(
-        f"/api/v1/plugins/{plugin['id']}/approve",
+        f"/api/v1/admin/plugins/{plugin['id']}/approve",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={"comment": "发布后允许评论"},
     )

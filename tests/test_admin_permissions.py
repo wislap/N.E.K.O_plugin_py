@@ -37,17 +37,17 @@ async def test_user_list_requires_admin(
     member_token = await login(client, "member")
     admin_token = await login(client, "admin")
 
-    anonymous_response = await client.get("/api/v1/users")
+    anonymous_response = await client.get("/api/v1/admin/users")
     assert anonymous_response.status_code in {401, 403}
 
     member_response = await client.get(
-        "/api/v1/users",
+        "/api/v1/admin/users",
         headers={"Authorization": f"Bearer {member_token}"},
     )
     assert member_response.status_code == 403
 
     admin_response = await client.get(
-        "/api/v1/users",
+        "/api/v1/admin/users",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert admin_response.status_code == 200
@@ -55,7 +55,7 @@ async def test_user_list_requires_admin(
     assert len(admin_response.json()["items"]) == 2
 
     search_response = await client.get(
-        "/api/v1/users?q=member&page=1&page_size=1",
+        "/api/v1/admin/users?q=member&page=1&page_size=1",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert search_response.status_code == 200
@@ -83,27 +83,27 @@ async def test_user_admin_safety_guards(
     admin_token = await login(client, "safe_admin")
 
     self_delete = await client.delete(
-        f"/api/v1/users/{admin.id}",
+        f"/api/v1/admin/users/{admin.id}",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert self_delete.status_code == 400
 
     demote_last_admin = await client.put(
-        f"/api/v1/users/{admin.id}",
+        f"/api/v1/admin/users/{admin.id}",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={"is_admin": False},
     )
     assert demote_last_admin.status_code == 400
 
     disable_last_admin = await client.put(
-        f"/api/v1/users/{admin.id}",
+        f"/api/v1/admin/users/{admin.id}",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={"is_active": False},
     )
     assert disable_last_admin.status_code == 400
 
     promote_member = await client.put(
-        f"/api/v1/users/{member.id}",
+        f"/api/v1/admin/users/{member.id}",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={"is_admin": True, "username": "safe_reviewer"},
     )
@@ -112,7 +112,7 @@ async def test_user_admin_safety_guards(
     assert promote_member.json()["username"] == "safe_reviewer"
 
     demote_original_admin = await client.put(
-        f"/api/v1/users/{admin.id}",
+        f"/api/v1/admin/users/{admin.id}",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={"is_admin": False},
     )
@@ -147,20 +147,20 @@ async def test_user_management_permission_allows_non_admin_operator(
     plain_token = await login(client, "plain_member")
 
     plain_list = await client.get(
-        "/api/v1/users",
+        "/api/v1/admin/users",
         headers={"Authorization": f"Bearer {plain_token}"},
     )
     assert plain_list.status_code == 403
 
     operator_list = await client.get(
-        "/api/v1/users",
+        "/api/v1/admin/users",
         headers={"Authorization": f"Bearer {operator_token}"},
     )
     assert operator_list.status_code == 200
     assert operator_list.json()["total"] == 3
 
     update_response = await client.put(
-        f"/api/v1/users/{target.id}",
+        f"/api/v1/admin/users/{target.id}",
         headers={"Authorization": f"Bearer {operator_token}"},
         json={"is_active": False, "username": "managed_member_disabled"},
     )
@@ -194,18 +194,18 @@ async def test_category_mutations_require_admin(
         "description": "工具类插件",
     }
 
-    anonymous_response = await client.post("/api/v1/categories", json=payload)
+    anonymous_response = await client.post("/api/v1/admin/categories", json=payload)
     assert anonymous_response.status_code in {401, 403}
 
     member_response = await client.post(
-        "/api/v1/categories",
+        "/api/v1/admin/categories",
         headers={"Authorization": f"Bearer {member_token}"},
         json=payload,
     )
     assert member_response.status_code == 403
 
     admin_response = await client.post(
-        "/api/v1/categories",
+        "/api/v1/admin/categories",
         headers={"Authorization": f"Bearer {admin_token}"},
         json=payload,
     )
@@ -213,13 +213,13 @@ async def test_category_mutations_require_admin(
     category_id = admin_response.json()["id"]
 
     delete_member_response = await client.delete(
-        f"/api/v1/categories/{category_id}",
+        f"/api/v1/admin/categories/{category_id}",
         headers={"Authorization": f"Bearer {member_token}"},
     )
     assert delete_member_response.status_code == 403
 
     delete_admin_response = await client.delete(
-        f"/api/v1/categories/{category_id}",
+        f"/api/v1/admin/categories/{category_id}",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert delete_admin_response.status_code == 200

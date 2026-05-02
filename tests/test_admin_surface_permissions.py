@@ -37,20 +37,20 @@ async def test_zone_admin_endpoints_require_admin(
         "description": "测试分区",
     }
 
-    anonymous_create = await client.post("/api/v1/admin/zones", params=create_params)
+    anonymous_create = await client.post("/api/v1/admin/zones", json=create_params)
     assert anonymous_create.status_code in {401, 403}
 
     member_create = await client.post(
         "/api/v1/admin/zones",
         headers={"Authorization": f"Bearer {member_token}"},
-        params=create_params,
+        json=create_params,
     )
     assert member_create.status_code == 403
 
     admin_create = await client.post(
         "/api/v1/admin/zones",
         headers={"Authorization": f"Bearer {admin_token}"},
-        params=create_params,
+        json=create_params,
     )
     assert admin_create.status_code == 201
     zone_id = admin_create.json()["id"]
@@ -60,6 +60,20 @@ async def test_zone_admin_endpoints_require_admin(
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert admin_delete.status_code == 200
+
+
+async def test_legacy_admin_paths_are_not_kept(client: AsyncClient):
+    checks = [
+        await client.get("/api/v1/users"),
+        await client.post("/api/v1/categories", json={"name": "旧分类", "slug": "legacy-category"}),
+        await client.post("/api/v1/signatures/admin/keys", json={"name": "legacy-key"}),
+        await client.get("/api/v1/logs/stats"),
+        await client.get("/api/v1/permissions/list"),
+        await client.post("/api/v1/plugins/1/approve", json={"comment": "legacy"}),
+    ]
+
+    for response in checks:
+        assert response.status_code in {404, 405}
 
 
 async def test_zone_management_permission_allows_non_admin_operator(
@@ -76,7 +90,7 @@ async def test_zone_management_permission_allows_non_admin_operator(
     plain_create = await client.post(
         "/api/v1/admin/zones",
         headers={"Authorization": f"Bearer {plain_token}"},
-        params={
+        json={
             "name": "普通用户分区",
             "slug": "plain-zone",
         },
@@ -92,7 +106,7 @@ async def test_zone_management_permission_allows_non_admin_operator(
     operator_create = await client.post(
         "/api/v1/admin/zones",
         headers={"Authorization": f"Bearer {operator_token}"},
-        params={
+        json={
             "name": "权限分区",
             "slug": "operator-zone",
             "description": "由分区管理员创建",
@@ -121,7 +135,7 @@ async def test_category_management_permission_allows_non_admin_operator(
     plain_token = await login(client, "category_plain")
 
     plain_create = await client.post(
-        "/api/v1/categories",
+        "/api/v1/admin/categories",
         headers={"Authorization": f"Bearer {plain_token}"},
         json={
             "name": "普通分类",
@@ -131,7 +145,7 @@ async def test_category_management_permission_allows_non_admin_operator(
     assert plain_create.status_code == 403
 
     operator_create = await client.post(
-        "/api/v1/categories",
+        "/api/v1/admin/categories",
         headers={"Authorization": f"Bearer {operator_token}"},
         json={
             "name": "权限分类",
@@ -160,28 +174,28 @@ async def test_permission_admin_mutations_require_admin(
         "description": "测试权限",
     }
 
-    anonymous_create = await client.post("/api/v1/permissions/create", json=permission_payload)
+    anonymous_create = await client.post("/api/v1/admin/permissions/create", json=permission_payload)
     assert anonymous_create.status_code in {401, 403}
 
     member_create = await client.post(
-        "/api/v1/permissions/create",
+        "/api/v1/admin/permissions/create",
         headers={"Authorization": f"Bearer {member_token}"},
         json=permission_payload,
     )
     assert member_create.status_code == 403
 
     admin_create = await client.post(
-        "/api/v1/permissions/create",
+        "/api/v1/admin/permissions/create",
         headers={"Authorization": f"Bearer {admin_token}"},
         json=permission_payload,
     )
     assert admin_create.status_code == 200
 
     member_list = await client.get(
-        "/api/v1/permissions/list",
+        "/api/v1/admin/permissions/list",
         headers={"Authorization": f"Bearer {member_token}"},
     )
-    assert member_list.status_code == 200
+    assert member_list.status_code == 403
 
     group_payload = {
         "code": "reviewers",
@@ -191,22 +205,22 @@ async def test_permission_admin_mutations_require_admin(
     }
 
     member_group_create = await client.post(
-        "/api/v1/permissions/groups/create",
+        "/api/v1/admin/permissions/groups/create",
         headers={"Authorization": f"Bearer {member_token}"},
         json=group_payload,
     )
     assert member_group_create.status_code == 403
 
     admin_group_create = await client.post(
-        "/api/v1/permissions/groups/create",
+        "/api/v1/admin/permissions/groups/create",
         headers={"Authorization": f"Bearer {admin_token}"},
         json=group_payload,
     )
     assert admin_group_create.status_code == 200
 
     groups_response = await client.get(
-        "/api/v1/permissions/groups",
-        headers={"Authorization": f"Bearer {member_token}"},
+        "/api/v1/admin/permissions/groups",
+        headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert groups_response.status_code == 200
     assert groups_response.json()[0]["permissions"][0]["code"] == "plugin:test"
@@ -243,21 +257,21 @@ async def test_permission_management_permission_allows_non_admin_operator(
     }
 
     plain_create = await client.post(
-        "/api/v1/permissions/create",
+        "/api/v1/admin/permissions/create",
         headers={"Authorization": f"Bearer {plain_token}"},
         json=permission_payload,
     )
     assert plain_create.status_code == 403
 
     operator_create = await client.post(
-        "/api/v1/permissions/create",
+        "/api/v1/admin/permissions/create",
         headers={"Authorization": f"Bearer {operator_token}"},
         json=permission_payload,
     )
     assert operator_create.status_code == 200
 
     group_response = await client.post(
-        "/api/v1/permissions/groups/create",
+        "/api/v1/admin/permissions/groups/create",
         headers={"Authorization": f"Bearer {operator_token}"},
         json={
             "code": "operator_reviewers",
@@ -269,7 +283,7 @@ async def test_permission_management_permission_allows_non_admin_operator(
     group_id = group_response.json()["id"]
 
     assign_response = await client.post(
-        f"/api/v1/permissions/users/{member.id}/assign",
+        f"/api/v1/admin/permissions/users/{member.id}/assign",
         headers={"Authorization": f"Bearer {operator_token}"},
         json={"group_ids": [group_id]},
     )
@@ -322,13 +336,13 @@ async def test_settings_and_logs_require_permissions(
     assert admin_update.json()["key"] == "smtp_host"
 
     member_logs = await client.get(
-        "/api/v1/logs/stats",
+        "/api/v1/admin/logs/stats",
         headers={"Authorization": f"Bearer {member_token}"},
     )
     assert member_logs.status_code == 403
 
     admin_logs = await client.get(
-        "/api/v1/logs/stats",
+        "/api/v1/admin/logs/stats",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert admin_logs.status_code == 200
@@ -346,21 +360,21 @@ async def test_signature_management_permission_allows_non_admin_operator(
     plain_token = await login(client, "signature_plain")
 
     plain_keys = await client.get(
-        "/api/v1/signatures/admin/keys",
+        "/api/v1/admin/signatures/keys",
         headers={"Authorization": f"Bearer {plain_token}"},
     )
     assert plain_keys.status_code == 403
 
     operator_create = await client.post(
-        "/api/v1/signatures/admin/keys",
+        "/api/v1/admin/signatures/keys",
         headers={"Authorization": f"Bearer {operator_token}"},
-        params={"name": "测试签名密钥", "set_as_default": True},
+        json={"name": "测试签名密钥", "set_as_default": True},
     )
     assert operator_create.status_code == 201
     assert operator_create.json()["name"] == "测试签名密钥"
 
     operator_keys = await client.get(
-        "/api/v1/signatures/admin/keys",
+        "/api/v1/admin/signatures/keys",
         headers={"Authorization": f"Bearer {operator_token}"},
     )
     assert operator_keys.status_code == 200
@@ -390,14 +404,14 @@ async def test_permission_group_grants_non_admin_access(
         },
     ]:
         response = await client.post(
-            "/api/v1/permissions/create",
+            "/api/v1/admin/permissions/create",
             headers={"Authorization": f"Bearer {admin_token}"},
             json=permission,
         )
         assert response.status_code == 200
 
     group_response = await client.post(
-        "/api/v1/permissions/groups/create",
+        "/api/v1/admin/permissions/groups/create",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={
             "code": "operators",
@@ -409,7 +423,7 @@ async def test_permission_group_grants_non_admin_access(
     group_id = group_response.json()["id"]
 
     assign_response = await client.post(
-        f"/api/v1/permissions/users/{member.id}/assign",
+        f"/api/v1/admin/permissions/users/{member.id}/assign",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={"group_ids": [group_id]},
     )
@@ -422,7 +436,7 @@ async def test_permission_group_grants_non_admin_access(
     assert settings_response.status_code == 200
 
     logs_response = await client.get(
-        "/api/v1/logs/stats",
+        "/api/v1/admin/logs/stats",
         headers={"Authorization": f"Bearer {member_token}"},
     )
     assert logs_response.status_code == 200

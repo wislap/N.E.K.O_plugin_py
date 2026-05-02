@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List
 
 from app.core.database import get_db
-from app.core.security import PermissionChecker, get_current_user
+from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.plugin import (
     PluginCreate, PluginUpdate, PluginList, PluginDetail,
@@ -12,15 +11,9 @@ from app.schemas.plugin import (
 )
 from app.schemas.common import PaginatedResponse, MessageResponse
 from app.services.plugin_service import PluginService
-from app.services.plugin_review_service import PluginReviewService
 from app.models.plugin import PluginStatus
 
 router = APIRouter()
-require_plugin_review = PermissionChecker("plugin:review")
-
-
-class PluginReviewDecisionRequest(BaseModel):
-    comment: Optional[str] = None
 
 
 @router.get("/plugins", response_model=PaginatedResponse[PluginList])
@@ -59,42 +52,6 @@ async def list_plugins(
     
     result = await PluginService.get_plugins(db, params, page, page_size)
     return result
-
-
-@router.get("/admin/plugins", response_model=PaginatedResponse[PluginList])
-async def list_admin_plugins(
-    q: Optional[str] = Query(None, description="搜索关键词"),
-    category: Optional[str] = Query(None, description="分类slug"),
-    author: Optional[str] = Query(None, description="作者名"),
-    plugin_status: Optional[PluginStatus] = Query(None, alias="status", description="插件状态"),
-    sort_by: Optional[str] = Query("created_at", description="排序字段"),
-    sort_order: Optional[str] = Query("desc", description="排序方向: asc/desc"),
-    featured_only: bool = Query(False, description="仅显示推荐插件"),
-    page: int = Query(1, ge=1, description="页码"),
-    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
-    current_user: User = Depends(require_plugin_review),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    获取管理员插件列表，可查看所有审核状态。
-    """
-    params = PluginSearchParams(
-        q=q,
-        category=category,
-        author=author,
-        sort_by=sort_by,
-        sort_order=sort_order,
-        status=plugin_status,
-        featured_only=featured_only
-    )
-
-    return await PluginService.get_plugins(
-        db,
-        params,
-        page,
-        page_size,
-        include_unpublished=True
-    )
 
 
 @router.get("/plugins/featured", response_model=List[PluginList])
@@ -255,62 +212,6 @@ async def delete_plugin(
     
     await PluginService.delete_plugin(db, plugin)
     return MessageResponse(message="插件已删除")
-
-
-@router.post("/plugins/{plugin_id}/approve", response_model=PluginSchema)
-async def approve_plugin(
-    plugin_id: int,
-    decision: Optional[PluginReviewDecisionRequest] = None,
-    current_user: User = Depends(require_plugin_review),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    审核通过插件（需要管理员权限）
-    """
-    plugin = await PluginService.get_plugin_by_id(db, plugin_id)
-    if not plugin:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="插件不存在"
-        )
-    
-    review_service = PluginReviewService()
-    approved_plugin = await review_service.record_admin_decision(
-        db,
-        plugin,
-        "approve",
-        current_user.id,
-        (decision.comment if decision else None) or "",
-    )
-    return approved_plugin
-
-
-@router.post("/plugins/{plugin_id}/reject", response_model=PluginSchema)
-async def reject_plugin(
-    plugin_id: int,
-    decision: Optional[PluginReviewDecisionRequest] = None,
-    current_user: User = Depends(require_plugin_review),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    拒绝插件（需要管理员权限）
-    """
-    plugin = await PluginService.get_plugin_by_id(db, plugin_id)
-    if not plugin:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="插件不存在"
-        )
-    
-    review_service = PluginReviewService()
-    rejected_plugin = await review_service.record_admin_decision(
-        db,
-        plugin,
-        "reject",
-        current_user.id,
-        (decision.comment if decision else None) or "",
-    )
-    return rejected_plugin
 
 
 @router.post("/plugins/{plugin_id}/download", response_model=MessageResponse)

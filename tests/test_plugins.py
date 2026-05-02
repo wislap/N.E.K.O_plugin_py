@@ -93,7 +93,7 @@ async def test_plugin_create_approve_list_and_download(
     assert pending_download.status_code == 404
 
     approve_response = await client.post(
-        f"/api/v1/plugins/{plugin['id']}/approve",
+        f"/api/v1/admin/plugins/{plugin['id']}/approve",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={"comment": "资料完整，审核通过"},
     )
@@ -191,7 +191,7 @@ async def test_admin_reject_records_review_feedback_for_owner(
     assert admin_pending_status_list.json()["total"] == 1
 
     reject_response = await client.post(
-        f"/api/v1/plugins/{plugin['id']}/reject",
+        f"/api/v1/admin/plugins/{plugin['id']}/reject",
         headers={"Authorization": f"Bearer {admin_token}"},
         json={"comment": "缺少 README 和安装说明"},
     )
@@ -345,7 +345,7 @@ async def test_plugin_review_permission_allows_non_admin_reviewer(
     assert reviewer_list.json()["total"] == 1
 
     approve_response = await client.post(
-        f"/api/v1/plugins/{plugin['id']}/approve",
+        f"/api/v1/admin/plugins/{plugin['id']}/approve",
         headers={"Authorization": f"Bearer {reviewer_token}"},
         json={"comment": "审核员权限通过"},
     )

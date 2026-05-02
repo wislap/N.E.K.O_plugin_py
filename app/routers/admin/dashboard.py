@@ -12,7 +12,7 @@ from app.models.plugin import Plugin, PluginStatus
 from app.models.user import User
 
 
-router = APIRouter(prefix="/admin/dashboard", tags=["admin-dashboard"])
+router = APIRouter(prefix="/dashboard", tags=["admin-dashboard"])
 
 ADMIN_DASHBOARD_PERMISSIONS = [
     "plugin:review",

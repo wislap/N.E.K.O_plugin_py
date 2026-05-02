@@ -1,94 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+from typing import List
 
 from app.core.database import get_db
-from app.core.security import PermissionChecker, get_current_user
+from app.core.security import get_current_user
 from app.services.signature_service import SignatureService
 from app.models.user import User
-from app.schemas.common import MessageResponse
 
 router = APIRouter()
 signature_service = SignatureService()
-require_signature_management = PermissionChecker("plugin:signature")
-
-
-# ========== 公钥管理（管理员） ==========
-
-@router.post("/admin/keys", response_model=dict, status_code=status.HTTP_201_CREATED)
-async def create_keypair(
-    name: str,
-    set_as_default: bool = False,
-    current_user: User = Depends(require_signature_management),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    创建新的签名密钥对（管理员）
-    """
-    try:
-        keypair = await signature_service.create_keypair(db, name, set_as_default)
-        return {
-            "id": keypair.id,
-            "name": keypair.name,
-            "public_key": keypair.public_key,
-            "is_default": keypair.is_default,
-            "is_active": keypair.is_active,
-            "created_at": keypair.created_at,
-            "message": "密钥对创建成功"
-        }
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-
-
-@router.get("/admin/keys", response_model=List[dict])
-async def list_keypairs(
-    current_user: User = Depends(require_signature_management),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    获取所有密钥对列表（管理员）
-    """
-    from app.models.plugin_signature import ServerKeyPair
-    from sqlalchemy import select
-    
-    result = await db.execute(select(ServerKeyPair))
-    keypairs = result.scalars().all()
-    
-    return [
-        {
-            "id": kp.id,
-            "name": kp.name,
-            "public_key": kp.public_key,
-            "is_default": kp.is_default,
-            "is_active": kp.is_active,
-            "created_at": kp.created_at,
-            "activated_at": kp.activated_at,
-            "deactivated_at": kp.deactivated_at
-        }
-        for kp in keypairs
-    ]
-
-
-@router.post("/admin/keys/{keypair_id}/deactivate", response_model=MessageResponse)
-async def deactivate_keypair(
-    keypair_id: int,
-    current_user: User = Depends(require_signature_management),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    停用密钥对（管理员）
-    """
-    try:
-        await signature_service.deactivate_keypair(db, keypair_id)
-        return MessageResponse(message="密钥对已停用")
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
 
 
 # ========== 公钥查询（公开） ==========
@@ -125,45 +45,6 @@ async def get_default_public_key(
         "is_default": keypair.is_default,
         "created_at": keypair.created_at
     }
-
-
-# ========== 插件签名（管理员） ==========
-
-@router.post("/plugins/{plugin_id}/sign", response_model=dict)
-async def sign_plugin(
-    plugin_id: int,
-    keypair_id: Optional[int] = None,
-    current_user: User = Depends(require_signature_management),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    为插件生成代码签名（管理员）
-    
-    插件审核通过后，从 GitHub 拉取 Python 文件并生成 EC 签名
-    """
-    try:
-        signature = await signature_service.sign_plugin_from_github(
-            db, plugin_id, keypair_id
-        )
-        
-        return {
-            "signature_id": signature.id,
-            "plugin_id": signature.plugin_id,
-            "plugin_name": signature.plugin_name,
-            "version": signature.version,
-            "signature": signature.signature,
-            "files_hash": signature.files_hash,
-            "files_count": len(signature.files_md5),
-            "payload": signature.payload,
-            "keypair_id": signature.keypair_id,
-            "created_at": signature.created_at,
-            "message": "插件签名成功"
-        }
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
 
 
 @router.get("/plugins/{plugin_id}/signatures", response_model=List[dict])
@@ -236,28 +117,6 @@ async def get_signature_by_version(
         "is_valid": signature.is_valid,
         "created_at": signature.created_at
     }
-
-
-@router.post("/admin/signatures/{signature_id}/revoke", response_model=MessageResponse)
-async def revoke_signature(
-    signature_id: int,
-    reason: str,
-    current_user: User = Depends(require_signature_management),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    撤销签名（管理员）
-    """
-    try:
-        await signature_service.revoke_signature(
-            db, signature_id, reason, current_user.id
-        )
-        return MessageResponse(message="签名已撤销")
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
 
 
 # ========== 签名校验（公开 API） ==========

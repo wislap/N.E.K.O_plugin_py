@@ -4,7 +4,16 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
-from app.routers import plugins, categories, users, reviews, versions, auth, plugin_reviews, signatures, zones, permissions, logs, notifications, admin_settings, admin_dashboard
+from app.routers import plugins, categories, users, reviews, versions, auth, plugin_reviews, signatures, zones, notifications
+from app.routers.admin import categories as admin_categories
+from app.routers.admin import dashboard as admin_dashboard
+from app.routers.admin import logs as admin_logs
+from app.routers.admin import permissions as admin_permissions
+from app.routers.admin import plugins as admin_plugins
+from app.routers.admin import settings as admin_settings
+from app.routers.admin import signatures as admin_signatures
+from app.routers.admin import users as admin_users
+from app.routers.admin import zones as admin_zones
 from app.services.bootstrap_service import BootstrapService
 from app.services.permission_service import PermissionService
 
@@ -53,11 +62,16 @@ app.include_router(reviews.router, prefix="/api/v1", tags=["reviews"])
 app.include_router(versions.router, prefix="/api/v1", tags=["versions"])
 app.include_router(plugin_reviews.router, prefix="/api/v1", tags=["plugin_reviews"])
 app.include_router(signatures.router, prefix="/api/v1/signatures", tags=["signatures"])
-app.include_router(permissions.router, prefix="/api/v1", tags=["permissions"])
-app.include_router(logs.router, prefix="/api/v1", tags=["logs"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
+app.include_router(admin_dashboard.router, prefix="/api/v1/admin", tags=["admin-dashboard"])
+app.include_router(admin_plugins.router, prefix="/api/v1/admin", tags=["admin-plugins"])
+app.include_router(admin_users.router, prefix="/api/v1/admin", tags=["admin-users"])
+app.include_router(admin_permissions.router, prefix="/api/v1/admin", tags=["admin-permissions"])
+app.include_router(admin_categories.router, prefix="/api/v1/admin", tags=["admin-categories"])
+app.include_router(admin_zones.router, prefix="/api/v1/admin", tags=["admin-zones"])
+app.include_router(admin_signatures.router, prefix="/api/v1/admin", tags=["admin-signatures"])
 app.include_router(admin_settings.router, prefix="/api/v1/admin", tags=["admin-settings"])
-app.include_router(admin_dashboard.router, prefix="/api/v1", tags=["admin-dashboard"])
+app.include_router(admin_logs.router, prefix="/api/v1/admin", tags=["admin-logs"])
 
 
 @app.get("/")

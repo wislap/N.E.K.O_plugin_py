@@ -91,7 +91,7 @@ export function hasAnyAdminAccess(permissionState: UserPermissions | null) {
 
 export const adminApi = {
   getMyPermissions() {
-    return request<UserPermissions>("/permissions/users/me");
+    return request<UserPermissions>("/admin/permissions/users/me");
   },
 
   getDashboardStats(): Promise<DashboardStats> {
@@ -100,7 +100,7 @@ export const adminApi = {
 
   getUsers(params: { q?: string; page?: number; page_size?: number } = {}) {
     const query = queryString(params);
-    return request<PaginatedResponse<User>>(`/users${query}`);
+    return request<PaginatedResponse<User>>(`/admin/users${query}`);
   },
 
   async getAllUsers() {
@@ -109,27 +109,27 @@ export const adminApi = {
   },
 
   updateUser(userId: number, data: Partial<User>) {
-    return put<User>(`/users/${userId}`, data);
+    return put<User>(`/admin/users/${userId}`, data);
   },
 
   deleteUser(userId: number) {
-    return del<{ message: string }>(`/users/${userId}`);
+    return del<{ message: string }>(`/admin/users/${userId}`);
   },
 
   getCategories() {
-    return request<Category[]>("/categories?with_count=true");
+    return request<Category[]>("/admin/categories");
   },
 
   createCategory(data: CategoryPayload) {
-    return post<Category>("/categories", data);
+    return post<Category>("/admin/categories", data);
   },
 
   updateCategory(categoryId: number, data: Partial<CategoryPayload>) {
-    return put<Category>(`/categories/${categoryId}`, data);
+    return put<Category>(`/admin/categories/${categoryId}`, data);
   },
 
   deleteCategory(categoryId: number) {
-    return del<{ message: string }>(`/categories/${categoryId}`);
+    return del<{ message: string }>(`/admin/categories/${categoryId}`);
   },
 
   getAdminZones() {
@@ -137,13 +137,11 @@ export const adminApi = {
   },
 
   createZone(data: ZonePayload) {
-    const query = queryString(data);
-    return post<ZoneAdminItem & { message: string }>(`/admin/zones${query}`);
+    return post<ZoneAdminItem & { message: string }>("/admin/zones", data);
   },
 
   updateZone(zoneId: number, data: Partial<Omit<ZonePayload, "slug">>) {
-    const query = queryString(data);
-    return put<ZoneAdminItem & { message: string }>(`/admin/zones/${zoneId}${query}`, {});
+    return put<ZoneAdminItem & { message: string }>(`/admin/zones/${zoneId}`, data);
   },
 
   deleteZone(zoneId: number) {
@@ -151,7 +149,7 @@ export const adminApi = {
   },
 
   getSignatureKeys() {
-    return request<ServerKeyPair[]>("/signatures/admin/keys");
+    return request<ServerKeyPair[]>("/admin/signatures/keys");
   },
 
   getDefaultPublicKey() {
@@ -159,12 +157,14 @@ export const adminApi = {
   },
 
   createSignatureKey(name: string, setAsDefault: boolean) {
-    const query = queryString({ name, set_as_default: setAsDefault });
-    return post<ServerKeyPair & { message: string }>(`/signatures/admin/keys${query}`);
+    return post<ServerKeyPair & { message: string }>("/admin/signatures/keys", {
+      name,
+      set_as_default: setAsDefault
+    });
   },
 
   deactivateSignatureKey(keypairId: number) {
-    return post<{ message: string }>(`/signatures/admin/keys/${keypairId}/deactivate`);
+    return post<{ message: string }>(`/admin/signatures/keys/${keypairId}/deactivate`);
   },
 
   async getAllPlugins() {
@@ -173,11 +173,11 @@ export const adminApi = {
   },
 
   approvePlugin(pluginId: number, comment?: string) {
-    return post<Plugin>(`/plugins/${pluginId}/approve`, { comment: comment?.trim() || null });
+    return post<Plugin>(`/admin/plugins/${pluginId}/approve`, { comment: comment?.trim() || null });
   },
 
   rejectPlugin(pluginId: number, comment?: string) {
-    return post<Plugin>(`/plugins/${pluginId}/reject`, { comment: comment?.trim() || null });
+    return post<Plugin>(`/admin/plugins/${pluginId}/reject`, { comment: comment?.trim() || null });
   },
 
   async getRoles() {
@@ -188,7 +188,7 @@ export const adminApi = {
       description?: string | null;
       is_system?: boolean;
       permissions?: Array<{ code: string }>;
-    }>>("/permissions/groups");
+    }>>("/admin/permissions/groups");
     return groups.map(toRole);
   },
 
@@ -200,7 +200,7 @@ export const adminApi = {
       description?: string | null;
       is_system?: boolean;
       permissions?: Array<{ code: string }>;
-    }>("/permissions/groups/create", {
+    }>("/admin/permissions/groups/create", {
       code: data.code || roleCodeFromName(data.name),
       name: data.name,
       description: data.description,
@@ -219,7 +219,7 @@ export const adminApi = {
       description?: string | null;
       is_system?: boolean;
       permissions?: Array<{ code: string }>;
-    }>(`/permissions/groups/${roleId}`, {
+    }>(`/admin/permissions/groups/${roleId}`, {
       name: data.name,
       description: data.description
     });
@@ -231,10 +231,10 @@ export const adminApi = {
       const toRemove = currentRole.permissions.filter((code) => !nextPermissions.has(code));
 
       if (toAdd.length > 0) {
-        await post(`/permissions/groups/${roleId}/permissions`, toAdd);
+        await post(`/admin/permissions/groups/${roleId}/permissions`, toAdd);
       }
       if (toRemove.length > 0) {
-        await delWithBody(`/permissions/groups/${roleId}/permissions`, toRemove);
+        await delWithBody(`/admin/permissions/groups/${roleId}/permissions`, toRemove);
       }
     }
 
@@ -243,7 +243,7 @@ export const adminApi = {
   },
 
   async deleteRole(roleId: number) {
-    return del<{ message: string }>(`/permissions/groups/${roleId}`);
+    return del<{ message: string }>(`/admin/permissions/groups/${roleId}`);
   },
 
   getSMTPSettings() {
@@ -276,14 +276,14 @@ export const adminApi = {
   },
 
   getLogStats() {
-    return request<LogStats>("/logs/stats");
+    return request<LogStats>("/admin/logs/stats");
   },
 
   cleanupLogs(logType = "all") {
-    return post<{ message: string; deleted_count: number }>(`/logs/cleanup?log_type=${encodeURIComponent(logType)}`);
+    return post<{ message: string; deleted_count: number }>("/admin/logs/cleanup", { log_type: logType });
   },
 
   getRetentionSettings() {
-    return request<Record<string, number>>("/logs/retention-settings");
+    return request<Record<string, number>>("/admin/logs/retention-settings");
   }
 };

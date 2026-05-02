@@ -84,22 +84,22 @@ async def test_signature_key_management_requires_admin(
     admin_token = await login(client, "admin")
 
     anonymous_create = await client.post(
-        "/api/v1/signatures/admin/keys",
-        params={"name": "release-key", "set_as_default": True},
+        "/api/v1/admin/signatures/keys",
+        json={"name": "release-key", "set_as_default": True},
     )
     assert anonymous_create.status_code in {401, 403}
 
     member_create = await client.post(
-        "/api/v1/signatures/admin/keys",
+        "/api/v1/admin/signatures/keys",
         headers={"Authorization": f"Bearer {member_token}"},
-        params={"name": "release-key", "set_as_default": True},
+        json={"name": "release-key", "set_as_default": True},
     )
     assert member_create.status_code == 403
 
     admin_create = await client.post(
-        "/api/v1/signatures/admin/keys",
+        "/api/v1/admin/signatures/keys",
         headers={"Authorization": f"Bearer {admin_token}"},
-        params={"name": "release-key", "set_as_default": True},
+        json={"name": "release-key", "set_as_default": True},
     )
     assert admin_create.status_code == 201
     keypair_id = admin_create.json()["id"]
@@ -109,13 +109,13 @@ async def test_signature_key_management_requires_admin(
     assert len(public_keys.json()) == 1
 
     member_list = await client.get(
-        "/api/v1/signatures/admin/keys",
+        "/api/v1/admin/signatures/keys",
         headers={"Authorization": f"Bearer {member_token}"},
     )
     assert member_list.status_code == 403
 
     admin_deactivate = await client.post(
-        f"/api/v1/signatures/admin/keys/{keypair_id}/deactivate",
+        f"/api/v1/admin/signatures/keys/{keypair_id}/deactivate",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert admin_deactivate.status_code == 200
