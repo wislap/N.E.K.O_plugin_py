@@ -41,6 +41,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { adminApi, type Plugin } from "@/services/adminApi";
+import { notifySuccess, reportError } from "@/lib/error-reporting";
 
 interface ReviewData {
   comment: string;
@@ -68,7 +69,11 @@ export default function AdminPlugins() {
       const data = await adminApi.getAllPlugins();
       setPlugins(data);
     } catch (error) {
-      console.error("获取插件列表失败:", error);
+      reportError(error, {
+        title: "获取插件列表失败",
+        userMessage: "无法加载插件审核列表，请稍后重试。",
+        context: { module: "admin.plugins", action: "fetchPlugins" }
+      });
     } finally {
       setIsLoading(false);
     }
@@ -79,8 +84,13 @@ export default function AdminPlugins() {
       await adminApi.approvePlugin(pluginId, reviewData.comment);
       fetchPlugins();
       setIsReviewOpen(false);
+      notifySuccess("插件已通过审核");
     } catch (error) {
-      console.error("审核通过失败:", error);
+      reportError(error, {
+        title: "审核通过失败",
+        userMessage: "插件审核通过操作失败，请检查权限或后端日志。",
+        context: { module: "admin.plugins", action: "approvePlugin", pluginId }
+      });
     }
   };
 
@@ -89,8 +99,13 @@ export default function AdminPlugins() {
       await adminApi.rejectPlugin(pluginId, reviewData.comment);
       fetchPlugins();
       setIsReviewOpen(false);
+      notifySuccess("插件已拒绝");
     } catch (error) {
-      console.error("审核拒绝失败:", error);
+      reportError(error, {
+        title: "审核拒绝失败",
+        userMessage: "插件审核拒绝操作失败，请检查权限或后端日志。",
+        context: { module: "admin.plugins", action: "rejectPlugin", pluginId }
+      });
     }
   };
 

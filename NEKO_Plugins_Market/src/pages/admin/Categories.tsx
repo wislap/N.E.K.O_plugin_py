@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { adminApi, type Category, type CategoryPayload } from "@/services/adminApi";
+import { notifySuccess, reportError } from "@/lib/error-reporting";
 
 const emptyForm: CategoryPayload = {
   name: "",
@@ -49,7 +50,11 @@ export default function AdminCategories() {
       const data = await adminApi.getCategories();
       setCategories(data);
     } catch (error) {
-      console.error("获取分类列表失败:", error);
+      reportError(error, {
+        title: "获取分类列表失败",
+        userMessage: "无法加载分类列表，请稍后重试。",
+        context: { module: "admin.categories", action: "fetchCategories" }
+      });
       setCategories([]);
     } finally {
       setIsLoading(false);
@@ -92,8 +97,13 @@ export default function AdminCategories() {
       }
       setIsEditorOpen(false);
       await fetchCategories();
+      notifySuccess(selectedCategory ? "分类已更新" : "分类已创建");
     } catch (error) {
-      console.error("保存分类失败:", error);
+      reportError(error, {
+        title: "保存分类失败",
+        userMessage: "分类保存失败，请检查名称、Slug 或权限。",
+        context: { module: "admin.categories", action: "saveCategory", categoryId: selectedCategory?.id }
+      });
     }
   };
 
@@ -103,8 +113,13 @@ export default function AdminCategories() {
       await adminApi.deleteCategory(selectedCategory.id);
       setIsDeleteOpen(false);
       await fetchCategories();
+      notifySuccess("分类已删除");
     } catch (error) {
-      console.error("删除分类失败:", error);
+      reportError(error, {
+        title: "删除分类失败",
+        userMessage: "分类删除失败，请检查权限或关联数据。",
+        context: { module: "admin.categories", action: "deleteCategory", categoryId: selectedCategory.id }
+      });
     }
   };
 

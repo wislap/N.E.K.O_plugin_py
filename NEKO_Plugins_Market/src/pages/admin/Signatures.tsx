@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { adminApi, type ServerKeyPair } from "@/services/adminApi";
+import { getErrorMessage, notifySuccess, reportError } from "@/lib/error-reporting";
 
 function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleString() : "-";
@@ -61,7 +62,13 @@ export default function AdminSignatures() {
     } catch (error) {
       setKeys([]);
       setDefaultKey(null);
-      setMessage(error instanceof Error ? error.message : "读取签名密钥失败");
+      const message = getErrorMessage(error, "读取签名密钥失败");
+      setMessage(message);
+      reportError(error, {
+        title: "读取签名密钥失败",
+        userMessage: message,
+        context: { module: "admin.signatures", action: "fetchKeys" }
+      });
     } finally {
       setIsLoading(false);
     }
@@ -77,8 +84,15 @@ export default function AdminSignatures() {
       setSetAsDefault(true);
       await fetchKeys();
       setMessage("签名密钥已创建。");
+      notifySuccess("签名密钥已创建");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "创建签名密钥失败");
+      const message = getErrorMessage(error, "创建签名密钥失败");
+      setMessage(message);
+      reportError(error, {
+        title: "创建签名密钥失败",
+        userMessage: message,
+        context: { module: "admin.signatures", action: "createKey", keyName: newKeyName }
+      });
     } finally {
       setIsSaving(false);
     }
@@ -92,8 +106,15 @@ export default function AdminSignatures() {
       setIsDeactivateOpen(false);
       await fetchKeys();
       setMessage("签名密钥已停用。");
+      notifySuccess("签名密钥已停用");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "停用签名密钥失败");
+      const message = getErrorMessage(error, "停用签名密钥失败");
+      setMessage(message);
+      reportError(error, {
+        title: "停用签名密钥失败",
+        userMessage: message,
+        context: { module: "admin.signatures", action: "deactivateKey", keyId: selectedKey.id }
+      });
     } finally {
       setIsSaving(false);
     }
@@ -103,8 +124,15 @@ export default function AdminSignatures() {
     try {
       await navigator.clipboard.writeText(publicKey);
       setMessage("公钥已复制。");
-    } catch {
+      notifySuccess("公钥已复制");
+    } catch (error) {
       setMessage("复制失败，请手动选择公钥内容。");
+      reportError(error, {
+        severity: "warn",
+        title: "复制公钥失败",
+        userMessage: "复制失败，请手动选择公钥内容。",
+        context: { module: "admin.signatures", action: "copyPublicKey" }
+      });
     }
   };
 

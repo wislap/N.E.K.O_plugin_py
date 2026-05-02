@@ -23,6 +23,7 @@ import { marked } from 'marked';
 import 'highlight.js/styles/github-dark.css';
 import { pluginsApi, reviewsApi } from '@/services/api';
 import type { Plugin, Review } from '@/types';
+import { getErrorMessage, logError, notifySuccess, reportError } from '@/lib/error-reporting';
 
 const ratingColors: Record<string, string> = {
   S: '#FFD700',
@@ -73,8 +74,16 @@ export function PluginDetail() {
       } catch (error) {
         if (isMounted) {
           setPlugin(null);
-          setErrorMessage(error instanceof Error ? error.message : '插件详情加载失败');
+          setErrorMessage(getErrorMessage(error, '插件详情加载失败'));
         }
+        reportError(error, {
+          title: '插件详情加载失败',
+          context: {
+            module: 'pluginDetail',
+            action: 'load',
+            pluginId: id
+          }
+        });
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -101,8 +110,16 @@ export function PluginDetail() {
         ...plugin,
         downloads: plugin.downloads + 1
       });
-    } catch {
-      // 下载入口仍然可用，计数失败时不阻断用户获取插件。
+    } catch (error) {
+      logError(error, {
+        title: '下载计数记录失败',
+        severity: 'warn',
+        context: {
+          module: 'pluginDetail',
+          action: 'recordDownload',
+          pluginId: plugin.id
+        }
+      });
     } finally {
       setIsDownloading(false);
     }
@@ -136,8 +153,25 @@ export function PluginDetail() {
       setReviewTitle('');
       setReviewContent('');
       setReviewRating(5);
+      notifySuccess('评论已提交', {
+        context: {
+          module: 'pluginDetail',
+          action: 'createReview',
+          pluginId: plugin.id
+        }
+      });
     } catch (error) {
-      setReviewError(error instanceof Error ? error.message : '评论提交失败');
+      const message = getErrorMessage(error, '评论提交失败');
+      setReviewError(message);
+      reportError(error, {
+        title: '评论提交失败',
+        context: {
+          module: 'pluginDetail',
+          action: 'createReview',
+          pluginId: plugin.id,
+          rating: reviewRating
+        }
+      });
     } finally {
       setIsSubmittingReview(false);
     }

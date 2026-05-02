@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { authApi } from "@/services/api";
+import { getErrorMessage, reportError } from "@/lib/error-reporting";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -26,8 +27,14 @@ export default function AdminLogin() {
       localStorage.setItem("token", response.access_token);
       localStorage.setItem("refreshToken", response.refresh_token);
       navigate("/admin");
-    } catch (err: any) {
-      setError(err.message || "登录失败，请检查用户名和密码");
+    } catch (err) {
+      const message = getErrorMessage(err, "登录失败，请检查用户名和密码");
+      setError(message);
+      reportError(err, {
+        title: "管理后台登录失败",
+        userMessage: message,
+        context: { module: "admin.login", action: "login", username }
+      });
     } finally {
       setIsLoading(false);
     }

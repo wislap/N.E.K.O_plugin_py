@@ -18,6 +18,7 @@ import {
   type UserPermissions
 } from "@/services/adminApi";
 import { adminModules } from "@/lib/adminModules";
+import { reportError } from "@/lib/error-reporting";
 
 const adminModuleByKey = Object.fromEntries(
   adminModules.map((module) => [module.key, module])
@@ -48,7 +49,11 @@ export default function AdminDashboard() {
       const data = await adminApi.getDashboardStats();
       setStats(data);
     } catch (error) {
-      console.error("获取统计数据失败:", error);
+      reportError(error, {
+        title: "获取后台统计失败",
+        userMessage: "无法加载后台统计，请检查权限或稍后重试。",
+        context: { module: "admin.dashboard", action: "fetchStats" }
+      });
     } finally {
       setIsLoading(false);
     }

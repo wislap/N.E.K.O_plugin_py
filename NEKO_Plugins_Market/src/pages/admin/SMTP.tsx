@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { adminApi, type SMTPSettings } from "@/services/adminApi";
+import { getErrorMessage, notifySuccess, reportError } from "@/lib/error-reporting";
 
 const defaultSettings: SMTPSettings = {
   host: "",
@@ -28,7 +29,15 @@ export default function AdminSMTP() {
   useEffect(() => {
     adminApi.getSMTPSettings()
       .then((data) => setSettings({ ...data, password: "" }))
-      .catch(() => setMessage("暂时无法读取 SMTP 设置，请确认后端已启动且账号具备权限。"));
+      .catch((error) => {
+        const message = "暂时无法读取 SMTP 设置，请确认后端已启动且账号具备权限。";
+        setMessage(message);
+        reportError(error, {
+          title: "读取 SMTP 设置失败",
+          userMessage: message,
+          context: { module: "admin.smtp", action: "getSMTPSettings" }
+        });
+      });
   }, []);
 
   const updateField = <K extends keyof SMTPSettings>(key: K, value: SMTPSettings[K]) => {
@@ -41,8 +50,15 @@ export default function AdminSMTP() {
     try {
       await adminApi.updateSMTPSettings(settings);
       setMessage("SMTP 设置已保存。");
+      notifySuccess("SMTP 设置已保存");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "保存失败");
+      const message = getErrorMessage(error, "保存失败");
+      setMessage(message);
+      reportError(error, {
+        title: "保存 SMTP 设置失败",
+        userMessage: message,
+        context: { module: "admin.smtp", action: "updateSMTPSettings" }
+      });
     } finally {
       setIsSaving(false);
     }
@@ -55,8 +71,15 @@ export default function AdminSMTP() {
     try {
       const result = await adminApi.testSMTP(testEmail);
       setMessage(result.message);
+      notifySuccess("SMTP 测试完成", result.message);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "测试邮件发送失败");
+      const message = getErrorMessage(error, "测试邮件发送失败");
+      setMessage(message);
+      reportError(error, {
+        title: "SMTP 测试失败",
+        userMessage: message,
+        context: { module: "admin.smtp", action: "testSMTP", testEmail }
+      });
     } finally {
       setIsTesting(false);
     }

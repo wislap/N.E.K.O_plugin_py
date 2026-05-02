@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { authApi } from '@/services/api';
 import { softReveal } from '@/lib/animations';
 import { isDebugAuthEnabled } from '@/lib/debug';
+import { getErrorMessage, notifySuccess, reportError } from '@/lib/error-reporting';
 
 type AuthMode = 'login' | 'register';
 
@@ -56,9 +57,25 @@ export function Auth() {
       });
 
       storeSession(response);
+      notifySuccess(targetMode === 'login' ? '登录成功' : '注册成功', {
+        context: {
+          module: 'auth',
+          action: targetMode
+        }
+      });
       navigate(nextPath, { replace: true });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '操作失败，请稍后重试');
+      const message = getErrorMessage(error, '操作失败，请稍后重试');
+      setErrorMessage(message);
+      reportError(error, {
+        title: targetMode === 'login' ? '登录失败' : '注册失败',
+        context: {
+          module: 'auth',
+          action: targetMode,
+          username,
+          email: targetMode === 'register' ? email : undefined
+        }
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -71,9 +88,23 @@ export function Auth() {
     try {
       const response = await authApi.debugLogin();
       storeSession(response);
+      notifySuccess('调试登录成功', {
+        context: {
+          module: 'auth',
+          action: 'debugLogin'
+        }
+      });
       navigate(nextPath, { replace: true });
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '调试登录失败');
+      const message = getErrorMessage(error, '调试登录失败');
+      setErrorMessage(message);
+      reportError(error, {
+        title: '调试登录失败',
+        context: {
+          module: 'auth',
+          action: 'debugLogin'
+        }
+      });
     } finally {
       setIsSubmitting(false);
     }

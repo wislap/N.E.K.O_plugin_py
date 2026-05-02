@@ -6,6 +6,7 @@ import { zonesApi } from '@/services/api';
 import type { Zone } from '@/types';
 import { listContainer } from '@/lib/animations';
 import { isDebugDataEnabled } from '@/lib/debug';
+import { logError } from '@/lib/error-reporting';
 
 export function ZonesSection() {
   const [zones, setZones] = useState<Zone[]>(
@@ -21,7 +22,16 @@ export function ZonesSection() {
           setZones(data);
         }
       })
-      .catch(() => {
+      .catch((error) => {
+        logError(error, {
+          title: '首页分区加载失败',
+          severity: 'warn',
+          context: {
+            module: 'home',
+            action: 'loadZones',
+            fallbackEnabled: isDebugDataEnabled
+          }
+        });
         if (isMounted && isDebugDataEnabled) {
           setZones(fallbackZones);
         }

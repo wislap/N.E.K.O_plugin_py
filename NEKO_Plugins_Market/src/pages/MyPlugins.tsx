@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { pluginsApi, type Plugin } from '@/services/api';
 import { listContainer, listItem, softReveal } from '@/lib/animations';
 import { isDebugAuthEnabled } from '@/lib/debug';
+import { getErrorMessage, reportError } from '@/lib/error-reporting';
 
 const statusMeta: Record<string, { label: string; className: string; icon: typeof Clock }> = {
   pending: {
@@ -84,8 +85,15 @@ export function MyPlugins() {
         }
       } catch (error) {
         if (isMounted) {
-          setErrorMessage(error instanceof Error ? error.message : '我的插件加载失败');
+          setErrorMessage(getErrorMessage(error, '我的插件加载失败'));
         }
+        reportError(error, {
+          title: '我的插件加载失败',
+          context: {
+            module: 'myPlugins',
+            action: 'mine'
+          }
+        });
       } finally {
         if (isMounted) {
           setIsLoading(false);

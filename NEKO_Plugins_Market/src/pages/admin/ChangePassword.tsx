@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authApi } from "@/services/api";
+import { getErrorMessage, notifySuccess, reportError } from "@/lib/error-reporting";
 
 export default function AdminChangePassword() {
   const navigate = useNavigate();
@@ -37,9 +38,16 @@ export default function AdminChangePassword() {
         new_password: newPassword
       });
       localStorage.setItem("currentUser", JSON.stringify(user));
+      notifySuccess("密码已修改");
       navigate("/admin", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "修改密码失败");
+      const message = getErrorMessage(err, "修改密码失败");
+      setError(message);
+      reportError(err, {
+        title: "修改初始密码失败",
+        userMessage: message,
+        context: { module: "admin.changePassword", action: "changePassword" }
+      });
     } finally {
       setIsSubmitting(false);
     }

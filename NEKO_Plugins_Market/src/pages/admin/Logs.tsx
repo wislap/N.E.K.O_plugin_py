@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { adminApi, type LogStats } from "@/services/adminApi";
+import { getErrorMessage, notifySuccess, reportError } from "@/lib/error-reporting";
 
 const logTypes = [
   { value: "all", label: "全部日志" },
@@ -32,7 +33,13 @@ export default function AdminLogs() {
       setStats(statsData);
       setRetention(retentionData);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "读取日志信息失败");
+      const message = getErrorMessage(error, "读取日志信息失败");
+      setMessage(message);
+      reportError(error, {
+        title: "读取日志信息失败",
+        userMessage: message,
+        context: { module: "admin.logs", action: "fetchLogs" }
+      });
       setStats({});
     } finally {
       setIsLoading(false);
@@ -50,8 +57,15 @@ export default function AdminLogs() {
       const result = await adminApi.cleanupLogs(logType);
       setMessage(`${result.message}，删除 ${result.deleted_count} 条记录。`);
       await fetchLogs();
+      notifySuccess("日志清理完成", `删除 ${result.deleted_count} 条记录`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "清理失败");
+      const message = getErrorMessage(error, "清理失败");
+      setMessage(message);
+      reportError(error, {
+        title: "清理日志失败",
+        userMessage: message,
+        context: { module: "admin.logs", action: "cleanupLogs", logType }
+      });
     } finally {
       setIsCleaning(false);
     }

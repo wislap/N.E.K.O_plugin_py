@@ -16,6 +16,7 @@ import { zones } from '@/data';
 import { pluginsApi } from '@/services/api';
 import type { Plugin } from '@/types';
 import { listContainer, softReveal } from '@/lib/animations';
+import { getErrorMessage, reportError } from '@/lib/error-reporting';
 
 type ViewMode = 'grid' | 'list';
 type SortOption = 'default' | 'downloads' | 'likes' | 'latest';
@@ -58,9 +59,18 @@ export function Plugins() {
         }
       } catch (error) {
         if (isMounted) {
-          setErrorMessage(error instanceof Error ? error.message : '插件列表加载失败');
+          const message = getErrorMessage(error, '插件列表加载失败');
+          setErrorMessage(message);
           setPlugins([]);
         }
+        reportError(error, {
+          title: '插件列表加载失败',
+          context: {
+            module: 'plugins',
+            action: 'list',
+            pageSize: 100
+          }
+        });
       } finally {
         if (isMounted) {
           setIsLoading(false);

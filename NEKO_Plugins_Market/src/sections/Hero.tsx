@@ -6,6 +6,7 @@ import { stats as fallbackStats } from '@/data';
 import { formatNumber } from '@/lib/utils';
 import { isDebugDataEnabled } from '@/lib/debug';
 import { marketApi, type MarketStats } from '@/services/api';
+import { logError } from '@/lib/error-reporting';
 
 const emptyStats: MarketStats = {
   totalPlugins: 0,
@@ -128,7 +129,16 @@ export function Hero() {
           setStats(data);
         }
       })
-      .catch(() => {
+      .catch((error) => {
+        logError(error, {
+          title: '首页统计加载失败',
+          severity: 'warn',
+          context: {
+            module: 'home',
+            action: 'loadMarketStats',
+            fallbackEnabled: isDebugDataEnabled
+          }
+        });
         if (isMounted && isDebugDataEnabled) {
           setStats(fallbackStats);
         }

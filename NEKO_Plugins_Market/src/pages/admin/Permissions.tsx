@@ -37,6 +37,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { adminApi } from "@/services/adminApi";
+import { notifySuccess, reportError } from "@/lib/error-reporting";
 
 interface Permission {
   id: string;
@@ -85,7 +86,11 @@ export default function AdminPermissions() {
       const data = await adminApi.getRoles();
       setRoles(data);
     } catch (error) {
-      console.error("获取角色列表失败:", error);
+      reportError(error, {
+        title: "获取权限组失败",
+        userMessage: "无法加载权限组列表，请检查权限。",
+        context: { module: "admin.permissions", action: "fetchRoles" }
+      });
       setRoles([]);
     } finally {
       setIsLoading(false);
@@ -122,8 +127,14 @@ export default function AdminPermissions() {
       fetchRoles();
       setIsEditOpen(false);
     } catch (error) {
-      console.error("保存角色失败:", error);
+      reportError(error, {
+        title: "保存权限组失败",
+        userMessage: "权限组保存失败，请检查权限配置。",
+        context: { module: "admin.permissions", action: "saveRole", roleId: selectedRole?.id }
+      });
+      return;
     }
+    notifySuccess(selectedRole ? "权限组已更新" : "权限组已创建");
   };
 
   const handleDelete = async () => {
@@ -132,8 +143,13 @@ export default function AdminPermissions() {
       await adminApi.deleteRole(selectedRole.id);
       fetchRoles();
       setIsDeleteOpen(false);
+      notifySuccess("权限组已删除");
     } catch (error) {
-      console.error("删除角色失败:", error);
+      reportError(error, {
+        title: "删除权限组失败",
+        userMessage: "权限组删除失败，请检查权限或系统组状态。",
+        context: { module: "admin.permissions", action: "deleteRole", roleId: selectedRole.id }
+      });
     }
   };
 

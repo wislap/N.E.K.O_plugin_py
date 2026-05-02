@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { adminApi, type ZoneAdminItem, type ZonePayload } from "@/services/adminApi";
+import { notifySuccess, reportError } from "@/lib/error-reporting";
 
 const emptyForm: ZonePayload = {
   name: "",
@@ -50,7 +51,11 @@ export default function AdminZones() {
       const data = await adminApi.getAdminZones();
       setZones(data);
     } catch (error) {
-      console.error("获取分区列表失败:", error);
+      reportError(error, {
+        title: "获取分区列表失败",
+        userMessage: "无法加载分区列表，请稍后重试。",
+        context: { module: "admin.zones", action: "fetchZones" }
+      });
       setZones([]);
     } finally {
       setIsLoading(false);
@@ -101,8 +106,13 @@ export default function AdminZones() {
       }
       setIsEditorOpen(false);
       await fetchZones();
+      notifySuccess(selectedZone ? "分区已更新" : "分区已创建");
     } catch (error) {
-      console.error("保存分区失败:", error);
+      reportError(error, {
+        title: "保存分区失败",
+        userMessage: "分区保存失败，请检查名称、Slug 或权限。",
+        context: { module: "admin.zones", action: "saveZone", zoneId: selectedZone?.id }
+      });
     }
   };
 
@@ -112,8 +122,13 @@ export default function AdminZones() {
       await adminApi.deleteZone(selectedZone.id);
       setIsDeleteOpen(false);
       await fetchZones();
+      notifySuccess("分区已删除");
     } catch (error) {
-      console.error("删除分区失败:", error);
+      reportError(error, {
+        title: "删除分区失败",
+        userMessage: "分区删除失败，请检查权限或关联数据。",
+        context: { module: "admin.zones", action: "deleteZone", zoneId: selectedZone.id }
+      });
     }
   };
 

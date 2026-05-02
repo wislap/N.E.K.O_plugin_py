@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { authApi, notificationsApi, type Notification, type User as ApiUser } from '@/services/api';
 import { adminApi, hasAnyAdminAccess } from '@/services/adminApi';
+import { logError, reportError } from '@/lib/error-reporting';
 
 export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -52,7 +53,15 @@ export function Header() {
           setNotifications(items);
           setUnreadCount(unread.count);
         }
-      } catch {
+      } catch (error) {
+        logError(error, {
+          title: '通知加载失败',
+          severity: 'warn',
+          context: {
+            module: 'header',
+            action: 'fetchNotifications'
+          }
+        });
         if (isMounted) {
           setNotifications([]);
           setUnreadCount(0);
@@ -86,7 +95,15 @@ export function Header() {
       if (cached) {
         try {
           setCurrentUser(JSON.parse(cached) as ApiUser);
-        } catch {
+        } catch (error) {
+          logError(error, {
+            title: '本地用户缓存解析失败',
+            severity: 'warn',
+            context: {
+              module: 'header',
+              action: 'parseCachedUser'
+            }
+          });
           localStorage.removeItem('currentUser');
         }
       }
@@ -101,7 +118,15 @@ export function Header() {
           setCanAccessAdmin(hasAnyAdminAccess(permissions));
           localStorage.setItem('currentUser', JSON.stringify(user));
         }
-      } catch {
+      } catch (error) {
+        logError(error, {
+          title: '登录状态同步失败',
+          severity: 'warn',
+          context: {
+            module: 'header',
+            action: 'syncUser'
+          }
+        });
         if (isMounted) {
           setCurrentUser(null);
           setCanAccessAdmin(false);
@@ -155,8 +180,16 @@ export function Header() {
     if (!notification.is_read) {
       try {
         await notificationsApi.markRead(notification.id);
-      } catch {
-        // 读取失败不阻断跳转。
+      } catch (error) {
+        logError(error, {
+          title: '通知标记已读失败',
+          severity: 'warn',
+          context: {
+            module: 'header',
+            action: 'markNotificationRead',
+            notificationId: notification.id
+          }
+        });
       }
       setUnreadCount((count) => Math.max(0, count - 1));
       setNotifications((items) =>
@@ -176,8 +209,14 @@ export function Header() {
       await notificationsApi.markAllRead();
       setUnreadCount(0);
       setNotifications((items) => items.map((item) => ({ ...item, is_read: true })));
-    } catch {
-      // 保持当前状态。
+    } catch (error) {
+      reportError(error, {
+        title: '全部通知标记已读失败',
+        context: {
+          module: 'header',
+          action: 'markAllNotificationsRead'
+        }
+      });
     }
   };
 

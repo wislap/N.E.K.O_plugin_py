@@ -26,6 +26,7 @@ import {
   type UserPermissions,
   type User as ApiUser
 } from "@/services/adminApi";
+import { logError } from "@/lib/error-reporting";
 
 const menuIcons = {
   dashboard: LayoutDashboard,
@@ -87,6 +88,14 @@ export default function AdminLayout() {
           navigate(firstAllowed?.path ?? "/", { replace: true });
         }
       } catch (error) {
+        logError(error, {
+          title: "管理员登录状态检查失败",
+          severity: "warn",
+          context: {
+            module: "adminLayout",
+            action: "fetchUser"
+          }
+        });
         navigate("/admin/login");
       }
     };

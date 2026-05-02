@@ -25,6 +25,7 @@ import { Separator } from '@/components/ui/separator';
 import { zones } from '@/data';
 import { pluginsApi } from '@/services/api';
 import { isDebugAuthEnabled } from '@/lib/debug';
+import { getErrorMessage, notifySuccess, reportError } from '@/lib/error-reporting';
 
 const standardTags = [
   '游戏', '查询', '攻略', '辅助', '陪玩', '互动', '情感', '增强',
@@ -88,10 +89,30 @@ export function Upload() {
         zone_slug: selectedZone,
         tags: selectedTags
       });
+      notifySuccess('插件已提交审核', {
+        context: {
+          module: 'upload',
+          action: 'createPlugin',
+          pluginName: pluginName.trim(),
+          repoUrl: githubUrl.trim()
+        }
+      });
       navigate('/my/plugins');
       setShowSuccess(true);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '上传失败，请稍后重试');
+      const message = getErrorMessage(error, '上传失败，请稍后重试');
+      setErrorMessage(message);
+      reportError(error, {
+        title: '上传插件失败',
+        context: {
+          module: 'upload',
+          action: 'createPlugin',
+          pluginName: pluginName.trim(),
+          repoUrl: githubUrl.trim(),
+          zoneSlug: selectedZone,
+          tagCount: selectedTags.length
+        }
+      });
     } finally {
       setIsSubmitting(false);
     }

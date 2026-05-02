@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { adminApi, type SystemSetting } from "@/services/adminApi";
+import { getErrorMessage, notifySuccess, reportError } from "@/lib/error-reporting";
 
 type EditableValue = string | number | boolean | null;
 
@@ -64,7 +65,13 @@ export default function AdminSettings() {
         )
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "读取系统设置失败");
+      const message = getErrorMessage(err, "读取系统设置失败");
+      setError(message);
+      reportError(err, {
+        title: "读取系统设置失败",
+        userMessage: message,
+        context: { module: "admin.settings", action: "fetchSettings" }
+      });
       setSettings([]);
     } finally {
       setIsLoading(false);
@@ -93,8 +100,15 @@ export default function AdminSettings() {
       const result = await adminApi.initSettings();
       setMessage(result.message);
       await fetchSettings();
+      notifySuccess("默认设置已初始化");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "初始化失败");
+      const message = getErrorMessage(err, "初始化失败");
+      setError(message);
+      reportError(err, {
+        title: "初始化系统设置失败",
+        userMessage: message,
+        context: { module: "admin.settings", action: "initSettings" }
+      });
     }
   };
 
@@ -106,8 +120,15 @@ export default function AdminSettings() {
       await adminApi.updateSetting(setting.key, drafts[setting.key]);
       setMessage(`${setting.key} 已保存`);
       await fetchSettings();
+      notifySuccess("设置已保存", setting.key);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "保存失败");
+      const message = getErrorMessage(err, "保存失败");
+      setError(message);
+      reportError(err, {
+        title: "保存系统设置失败",
+        userMessage: message,
+        context: { module: "admin.settings", action: "updateSetting", key: setting.key }
+      });
     } finally {
       setSavingKey(null);
     }

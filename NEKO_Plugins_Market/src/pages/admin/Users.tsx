@@ -54,6 +54,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { adminApi, type User as UserType } from "@/services/adminApi";
+import { notifySuccess, reportError } from "@/lib/error-reporting";
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<UserType[]>([]);
@@ -99,7 +100,11 @@ export default function AdminUsers() {
       setTotal(data.total);
       setTotalPages(data.total_pages ?? 0);
     } catch (error) {
-      console.error("获取用户列表失败:", error);
+      reportError(error, {
+        title: "获取用户列表失败",
+        userMessage: "无法加载用户列表，请稍后重试。",
+        context: { module: "admin.users", action: "fetchUsers", debouncedSearch, page, pageSize }
+      });
       setUsers([]);
       setTotal(0);
       setTotalPages(0);
@@ -125,8 +130,13 @@ export default function AdminUsers() {
       await adminApi.updateUser(selectedUser.id, editForm);
       await fetchUsers();
       setIsEditOpen(false);
+      notifySuccess("用户已更新");
     } catch (error) {
-      console.error("更新用户失败:", error);
+      reportError(error, {
+        title: "更新用户失败",
+        userMessage: "用户信息保存失败，请检查输入或权限。",
+        context: { module: "admin.users", action: "updateUser", userId: selectedUser.id }
+      });
     }
   };
 
@@ -136,8 +146,13 @@ export default function AdminUsers() {
       await adminApi.deleteUser(selectedUser.id);
       await fetchUsers();
       setIsDeleteOpen(false);
+      notifySuccess("用户已删除");
     } catch (error) {
-      console.error("删除用户失败:", error);
+      reportError(error, {
+        title: "删除用户失败",
+        userMessage: "删除用户失败，请检查权限或用户状态。",
+        context: { module: "admin.users", action: "deleteUser", userId: selectedUser.id }
+      });
     }
   };
 
@@ -145,8 +160,13 @@ export default function AdminUsers() {
     try {
       await adminApi.updateUser(user.id, { is_active: !user.is_active });
       await fetchUsers();
+      notifySuccess(user.is_active ? "用户已禁用" : "用户已启用");
     } catch (error) {
-      console.error("切换用户状态失败:", error);
+      reportError(error, {
+        title: "切换用户状态失败",
+        userMessage: "用户状态切换失败，请检查权限。",
+        context: { module: "admin.users", action: "toggleActive", userId: user.id }
+      });
     }
   };
 

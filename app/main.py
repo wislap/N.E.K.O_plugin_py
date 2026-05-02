@@ -14,6 +14,7 @@ from app.routers.admin import settings as admin_settings
 from app.routers.admin import signatures as admin_signatures
 from app.routers.admin import users as admin_users
 from app.routers.admin import zones as admin_zones
+from app.middleware.request_id import REQUEST_ID_HEADER, request_id_middleware
 from app.services.bootstrap_service import BootstrapService
 from app.services.permission_service import PermissionService
 
@@ -43,6 +44,8 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+app.middleware("http")(request_id_middleware)
+
 # 配置 CORS
 app.add_middleware(
     CORSMiddleware,
@@ -50,6 +53,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[REQUEST_ID_HEADER],
 )
 
 # 注册路由

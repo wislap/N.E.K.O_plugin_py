@@ -3,6 +3,9 @@ import { AnimatePresence } from 'framer-motion';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { PageTransition } from '@/components/PageTransition';
+import { AppDiagnostics } from '@/components/AppDiagnostics';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { Toaster } from '@/components/ui/sonner';
 import { Home } from '@/pages/Home';
 import { Plugins } from '@/pages/Plugins';
 import { PluginDetail } from '@/pages/PluginDetail';
@@ -70,9 +73,13 @@ function MainLayout() {
 function App() {
   return (
     <HashRouter>
-      <div className="min-h-screen bg-[#0F0F1A]">
-        <MainLayout />
-      </div>
+      <ErrorBoundary>
+        <AppDiagnostics />
+        <div className="min-h-screen bg-[#0F0F1A]">
+          <MainLayout />
+        </div>
+        <Toaster richColors closeButton position="top-right" />
+      </ErrorBoundary>
     </HashRouter>
   );
 }

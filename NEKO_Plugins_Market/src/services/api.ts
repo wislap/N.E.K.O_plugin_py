@@ -1,6 +1,35 @@
 import type { Plugin as MarketPlugin, Rating, Review as MarketReview, Zone } from "@/types";
+import { logError } from "@/lib/error-reporting";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
+const REQUEST_ID_HEADER = "X-Request-ID";
+
+export class ApiError extends Error {
+  status: number;
+  path: string;
+  method: string;
+  requestId: string;
+  detail?: unknown;
+  responseBody?: unknown;
+
+  constructor(message: string, options: {
+    status: number;
+    path: string;
+    method: string;
+    requestId: string;
+    detail?: unknown;
+    responseBody?: unknown;
+  }) {
+    super(message);
+    this.name = "ApiError";
+    this.status = options.status;
+    this.path = options.path;
+    this.method = options.method;
+    this.requestId = options.requestId;
+    this.detail = options.detail;
+    this.responseBody = options.responseBody;
+  }
+}
 
 export interface User {
   id: number;
@@ -185,9 +214,16 @@ function getToken() {
   return localStorage.getItem("token");
 }
 
+function createRequestId() {
+  return `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers = new Headers(options.headers);
+  const method = options.method ?? "GET";
+  const requestId = headers.get(REQUEST_ID_HEADER) ?? createRequestId();
+  headers.set(REQUEST_ID_HEADER, requestId);
 
   if (!headers.has("Content-Type") && options.body) {
     headers.set("Content-Type", "application/json");
@@ -197,21 +233,78 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers
+    });
+  } catch (error) {
+    const networkError = new ApiError(
+      error instanceof Error ? error.message : "网络请求失败，请检查后端服务是否已启动。",
+      {
+        status: 0,
+        path,
+        method,
+        requestId,
+        detail: error
+      }
+    );
+    logError(networkError, {
+      severity: "error",
+      title: "网络请求失败",
+      context: { method, path, apiBaseUrl: API_BASE_URL, requestId }
+    });
+    throw networkError;
+  }
+
+  const responseRequestId = response.headers.get(REQUEST_ID_HEADER) ?? requestId;
 
   if (!response.ok) {
     let message = `请求失败：${response.status}`;
+    let responseBody: unknown;
+    let detail: unknown;
     try {
-      const data = await response.json() as { detail?: string };
-      message = data.detail ?? message;
+      const data = await response.clone().json() as { detail?: unknown };
+      responseBody = data;
+      detail = data.detail;
+      if (typeof data.detail === "string") {
+        message = data.detail;
+      } else if (Array.isArray(data.detail)) {
+        message = data.detail
+          .map((item) => {
+            if (typeof item === "object" && item && "msg" in item) {
+              return String((item as { msg: unknown }).msg);
+            }
+            return String(item);
+          })
+          .join("；");
+      }
     } catch {
       const text = await response.text();
+      responseBody = text;
       message = text || message;
     }
-    throw new Error(message);
+    const error = new ApiError(message, {
+      status: response.status,
+      path,
+      method,
+      requestId: responseRequestId,
+      detail,
+      responseBody
+    });
+    logError(error, {
+      severity: response.status >= 500 ? "error" : "warn",
+      title: "API 请求失败",
+      context: {
+        method,
+        path,
+        status: response.status,
+        requestId: responseRequestId,
+        responseBody
+      }
+    });
+    throw error;
   }
 
   if (response.status === 204) {
