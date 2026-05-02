@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey, Enum, JSON
+from sqlalchemy import inspect
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -91,6 +92,34 @@ class Plugin(Base):
     def zone_slug(self):
         """获取插件分区 slug"""
         return self.zone.slug if self.zone else None
+
+    @property
+    def review_summary(self):
+        """获取最近一次审核摘要，供提交者和管理员查看。"""
+        if "reviews_history" in inspect(self).unloaded:
+            return None
+
+        reviews = list(self.reviews_history or [])
+        if not reviews:
+            return None
+
+        latest_review = max(
+            reviews,
+            key=lambda review: review.completed_at
+            or review.manual_reviewed_at
+            or review.submitted_at
+            or self.created_at,
+        )
+
+        return {
+            "stage": latest_review.stage.value if latest_review.stage else None,
+            "manual_review_notes": latest_review.manual_review_notes,
+            "review_feedback": latest_review.review_feedback,
+            "manual_reviewed_at": latest_review.manual_reviewed_at,
+            "completed_at": latest_review.completed_at,
+            "ai_score": latest_review.ai_score,
+            "ai_recommendation": latest_review.ai_recommendation,
+        }
     
     def to_frontend_dict(self):
         """转换为前端需要的格式"""

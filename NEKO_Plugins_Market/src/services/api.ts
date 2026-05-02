@@ -40,6 +40,15 @@ export interface Plugin {
   created_at: string;
   updated_at: string;
   published_at?: string | null;
+  review_summary?: {
+    stage?: string | null;
+    manual_review_notes?: string | null;
+    review_feedback?: string | null;
+    manual_reviewed_at?: string | null;
+    completed_at?: string | null;
+    ai_score?: number | null;
+    ai_recommendation?: string | null;
+  } | null;
 }
 
 export interface Role {
@@ -377,13 +386,14 @@ export const zonesApi = {
 
 export const adminApi = {
   async getDashboardStats(): Promise<DashboardStats> {
-    const [users, plugins] = await Promise.all([
-      this.getAllUsers().catch(() => [] as User[]),
+    const [usersPage, plugins] = await Promise.all([
+      this.getUsers({ page: 1, page_size: 100 }).catch(() => ({ items: [] as User[], total: 0 })),
       this.getAllPlugins().catch(() => [] as Plugin[])
     ]);
+    const users = usersPage.items;
 
     return {
-      totalUsers: users.length,
+      totalUsers: usersPage.total,
       totalPlugins: plugins.length,
       pendingPlugins: plugins.filter((plugin) => plugin.status === "pending").length,
       approvedPlugins: plugins.filter((plugin) => plugin.status === "approved").length,
@@ -393,8 +403,14 @@ export const adminApi = {
     };
   },
 
-  getAllUsers() {
-    return request<User[]>("/users");
+  getUsers(params: { q?: string; page?: number; page_size?: number } = {}) {
+    const query = queryString(params);
+    return request<PaginatedResponse<User>>(`/users${query}`);
+  },
+
+  async getAllUsers() {
+    const data = await this.getUsers({ page: 1, page_size: 100 });
+    return data.items;
   },
 
   updateUser(userId: number, data: Partial<User>) {
@@ -421,13 +437,12 @@ export const adminApi = {
     ];
   },
 
-  approvePlugin(pluginId: number) {
-    return post<Plugin>(`/plugins/${pluginId}/approve`);
+  approvePlugin(pluginId: number, comment?: string) {
+    return post<Plugin>(`/plugins/${pluginId}/approve`, { comment: comment?.trim() || null });
   },
 
   rejectPlugin(pluginId: number, comment?: string) {
-    void comment;
-    return post<Plugin>(`/plugins/${pluginId}/reject`);
+    return post<Plugin>(`/plugins/${pluginId}/reject`, { comment: comment?.trim() || null });
   },
 
   async getRoles() {

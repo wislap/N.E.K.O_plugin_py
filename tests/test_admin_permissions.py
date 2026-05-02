@@ -51,7 +51,16 @@ async def test_user_list_requires_admin(
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert admin_response.status_code == 200
-    assert len(admin_response.json()) == 2
+    assert admin_response.json()["total"] == 2
+    assert len(admin_response.json()["items"]) == 2
+
+    search_response = await client.get(
+        "/api/v1/users?q=member&page=1&page_size=1",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert search_response.status_code == 200
+    assert search_response.json()["total"] == 1
+    assert search_response.json()["items"][0]["username"] == "member"
 
 
 async def test_category_mutations_require_admin(

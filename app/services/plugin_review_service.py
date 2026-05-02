@@ -306,6 +306,78 @@ class PluginReviewService:
         await db.commit()
         await db.refresh(review)
         return review
+
+    async def record_admin_decision(
+        self,
+        db: AsyncSession,
+        plugin: Plugin,
+        decision: str,
+        reviewer_id: int,
+        notes: str = ""
+    ) -> Plugin:
+        """记录管理员快速审核结果，并同步插件状态。"""
+        if decision not in {"approve", "reject"}:
+            raise ValueError("不支持的审核决定")
+
+        result = await db.execute(
+            select(PluginReview)
+            .where(PluginReview.plugin_id == plugin.id)
+            .order_by(desc(PluginReview.submitted_at), desc(PluginReview.id))
+        )
+        review = result.scalars().first()
+
+        if not review:
+            review = PluginReview(
+                plugin_id=plugin.id,
+                repo_url=plugin.repo_url,
+                repo_branch=plugin.repo_branch or "main",
+                stage=ReviewStage.SUBMITTED,
+            )
+            db.add(review)
+            await db.flush()
+            await self._add_history(
+                db,
+                plugin.id,
+                review.id,
+                None,
+                ReviewStage.SUBMITTED,
+                "插件进入管理员审核",
+                reviewer_id,
+                "user",
+            )
+
+        old_stage = review.stage
+        now = utc_now()
+        new_stage = ReviewStage.APPROVED if decision == "approve" else ReviewStage.REJECTED
+        action_label = "通过" if decision == "approve" else "拒绝"
+
+        review.stage = new_stage
+        review.manual_reviewer_id = reviewer_id
+        review.manual_review_notes = notes or None
+        review.review_feedback = notes or review.review_feedback
+        review.manual_reviewed_at = now
+        review.completed_at = now
+
+        if decision == "approve":
+            plugin.status = PluginStatus.APPROVED
+            plugin.published_at = now
+        else:
+            plugin.status = PluginStatus.REJECTED
+
+        await self._add_history(
+            db,
+            plugin.id,
+            review.id,
+            old_stage,
+            new_stage,
+            f"管理员审核{action_label}" + (f": {notes}" if notes else ""),
+            reviewer_id,
+            "user",
+        )
+
+        await db.commit()
+        await db.refresh(plugin)
+        return plugin
     
     async def get_review_history(
         self,

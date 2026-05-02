@@ -23,6 +23,7 @@ class PluginService:
                 selectinload(Plugin.categories),
                 selectinload(Plugin.author),
                 selectinload(Plugin.zone),
+                selectinload(Plugin.reviews_history),
             )
             .where(Plugin.id == plugin_id)
         )
@@ -33,7 +34,7 @@ class PluginService:
         """通过slug获取插件"""
         result = await db.execute(
             select(Plugin)
-            .options(selectinload(Plugin.zone))
+            .options(selectinload(Plugin.zone), selectinload(Plugin.reviews_history))
             .where(Plugin.slug == slug)
         )
         return result.scalar_one_or_none()
@@ -46,7 +47,11 @@ class PluginService:
         page_size: int = 20
     ) -> PaginatedResponse:
         """获取插件列表（支持搜索和筛选）"""
-        query = select(Plugin).options(selectinload(Plugin.categories), selectinload(Plugin.zone))
+        query = select(Plugin).options(
+            selectinload(Plugin.categories),
+            selectinload(Plugin.zone),
+            selectinload(Plugin.reviews_history),
+        )
         
         # 构建过滤条件
         filters = []
@@ -121,7 +126,11 @@ class PluginService:
         """获取指定作者的所有插件"""
         result = await db.execute(
             select(Plugin)
-            .options(selectinload(Plugin.categories), selectinload(Plugin.zone))
+            .options(
+                selectinload(Plugin.categories),
+                selectinload(Plugin.zone),
+                selectinload(Plugin.reviews_history),
+            )
             .where(Plugin.author_id == author_id)
             .order_by(desc(Plugin.created_at))
         )
@@ -275,7 +284,11 @@ class PluginService:
         """获取推荐插件"""
         result = await db.execute(
             select(Plugin)
-            .options(selectinload(Plugin.categories), selectinload(Plugin.zone))
+            .options(
+                selectinload(Plugin.categories),
+                selectinload(Plugin.zone),
+                selectinload(Plugin.reviews_history),
+            )
             .where(
                 and_(
                     Plugin.is_featured > 0,
@@ -292,7 +305,11 @@ class PluginService:
         """获取热门插件"""
         result = await db.execute(
             select(Plugin)
-            .options(selectinload(Plugin.categories), selectinload(Plugin.zone))
+            .options(
+                selectinload(Plugin.categories),
+                selectinload(Plugin.zone),
+                selectinload(Plugin.reviews_history),
+            )
             .where(Plugin.status == PluginStatus.APPROVED)
             .order_by(desc(Plugin.download_count))
             .limit(limit)
@@ -304,7 +321,11 @@ class PluginService:
         """获取最新插件"""
         result = await db.execute(
             select(Plugin)
-            .options(selectinload(Plugin.categories), selectinload(Plugin.zone))
+            .options(
+                selectinload(Plugin.categories),
+                selectinload(Plugin.zone),
+                selectinload(Plugin.reviews_history),
+            )
             .where(Plugin.status == PluginStatus.APPROVED)
             .order_by(desc(Plugin.created_at))
             .limit(limit)

@@ -53,6 +53,10 @@ function formatDate(value?: string | null) {
   });
 }
 
+function getReviewNote(plugin: Plugin) {
+  return plugin.review_summary?.manual_review_notes || plugin.review_summary?.review_feedback || '';
+}
+
 export function MyPlugins() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -162,6 +166,8 @@ export function MyPlugins() {
             {plugins.map((plugin) => {
               const meta = statusMeta[plugin.status] ?? statusMeta.pending;
               const StatusIcon = meta.icon;
+              const reviewNote = getReviewNote(plugin);
+              const reviewedAt = plugin.review_summary?.completed_at || plugin.review_summary?.manual_reviewed_at;
 
               return (
                 <motion.article
@@ -200,6 +206,23 @@ export function MyPlugins() {
                           </a>
                         )}
                       </div>
+                      {(reviewNote || reviewedAt) && (
+                        <div className="mt-4 rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
+                          <div className="mb-1 text-sm font-medium text-slate-300">
+                            {plugin.status === 'rejected' ? '拒绝原因' : '审核意见'}
+                          </div>
+                          {reviewNote && (
+                            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-400">
+                              {reviewNote}
+                            </p>
+                          )}
+                          {reviewedAt && (
+                            <div className="mt-2 text-xs text-slate-500">
+                              审核时间 {formatDate(reviewedAt)}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex shrink-0 items-center gap-2">

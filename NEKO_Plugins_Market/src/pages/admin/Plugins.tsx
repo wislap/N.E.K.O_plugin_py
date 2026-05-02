@@ -84,7 +84,7 @@ export default function AdminPlugins() {
 
   const handleApprove = async (pluginId: number) => {
     try {
-      await adminApi.approvePlugin(pluginId);
+      await adminApi.approvePlugin(pluginId, reviewData.comment);
       fetchPlugins();
       setIsReviewOpen(false);
     } catch (error) {
@@ -271,6 +271,13 @@ export default function AdminPlugins() {
                               size="sm"
                               onClick={() => {
                                 setSelectedPlugin(plugin);
+                                setReviewData({
+                                  rating: "B",
+                                  functionality: "B",
+                                  security: "B",
+                                  documentation: "B",
+                                  comment: ""
+                                });
                                 setIsReviewOpen(true);
                               }}
                             >

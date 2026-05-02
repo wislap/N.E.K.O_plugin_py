@@ -1,28 +1,61 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import List
+from sqlalchemy import select, func, or_
 
 from app.core.database import get_db
 from app.core.security import get_current_user, get_current_admin_user
 from app.schemas.user import User, UserCreate, UserUpdate
-from app.schemas.common import MessageResponse
+from app.schemas.common import MessageResponse, PaginatedResponse
 from app.models.user import User as UserModel
 
 router = APIRouter()
 
 
-@router.get("/users", response_model=List[User])
+@router.get("/users", response_model=PaginatedResponse[User])
 async def list_users(
+    q: str | None = Query(None, description="搜索用户名、邮箱或昵称"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     current_user: UserModel = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    获取所有用户列表（需要管理员权限）
+    获取用户列表（需要管理员权限），支持分页和搜索
     """
-    result = await db.execute(select(UserModel))
-    users = result.scalars().all()
-    return users
+    filters = []
+    if q:
+        keyword = f"%{q}%"
+        filters.append(
+            or_(
+                UserModel.username.ilike(keyword),
+                UserModel.email.ilike(keyword),
+                UserModel.display_name.ilike(keyword),
+            )
+        )
+
+    query = select(UserModel)
+    count_query = select(func.count(UserModel.id))
+    if filters:
+        query = query.where(*filters)
+        count_query = count_query.where(*filters)
+
+    total = (await db.execute(count_query)).scalar() or 0
+    offset = (page - 1) * page_size
+    result = await db.execute(
+        query.order_by(UserModel.created_at.desc()).offset(offset).limit(page_size)
+    )
+    users = list(result.scalars().all())
+    total_pages = (total + page_size - 1) // page_size
+
+    return PaginatedResponse(
+        items=users,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+        has_next=page < total_pages,
+        has_prev=page > 1,
+    )
 
 
 @router.get("/users/{user_id}", response_model=User)

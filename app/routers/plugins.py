@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List
 
@@ -11,9 +12,14 @@ from app.schemas.plugin import (
 )
 from app.schemas.common import PaginatedResponse, MessageResponse
 from app.services.plugin_service import PluginService
+from app.services.plugin_review_service import PluginReviewService
 from app.models.plugin import PluginStatus
 
 router = APIRouter()
+
+
+class PluginReviewDecisionRequest(BaseModel):
+    comment: Optional[str] = None
 
 
 @router.get("/plugins", response_model=PaginatedResponse[PluginList])
@@ -21,6 +27,7 @@ async def list_plugins(
     q: Optional[str] = Query(None, description="搜索关键词"),
     category: Optional[str] = Query(None, description="分类slug"),
     author: Optional[str] = Query(None, description="作者名"),
+    plugin_status: Optional[PluginStatus] = Query(None, alias="status", description="插件状态"),
     sort_by: Optional[str] = Query("created_at", description="排序字段"),
     sort_order: Optional[str] = Query("desc", description="排序方向: asc/desc"),
     featured_only: bool = Query(False, description="仅显示推荐插件"),
@@ -37,6 +44,7 @@ async def list_plugins(
         author=author,
         sort_by=sort_by,
         sort_order=sort_order,
+        status=plugin_status,
         featured_only=featured_only
     )
     
@@ -207,6 +215,7 @@ async def delete_plugin(
 @router.post("/plugins/{plugin_id}/approve", response_model=PluginSchema)
 async def approve_plugin(
     plugin_id: int,
+    decision: Optional[PluginReviewDecisionRequest] = None,
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -220,13 +229,21 @@ async def approve_plugin(
             detail="插件不存在"
         )
     
-    approved_plugin = await PluginService.approve_plugin(db, plugin)
+    review_service = PluginReviewService()
+    approved_plugin = await review_service.record_admin_decision(
+        db,
+        plugin,
+        "approve",
+        current_user.id,
+        (decision.comment if decision else None) or "",
+    )
     return approved_plugin
 
 
 @router.post("/plugins/{plugin_id}/reject", response_model=PluginSchema)
 async def reject_plugin(
     plugin_id: int,
+    decision: Optional[PluginReviewDecisionRequest] = None,
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -240,7 +257,14 @@ async def reject_plugin(
             detail="插件不存在"
         )
     
-    rejected_plugin = await PluginService.reject_plugin(db, plugin)
+    review_service = PluginReviewService()
+    rejected_plugin = await review_service.record_admin_decision(
+        db,
+        plugin,
+        "reject",
+        current_user.id,
+        (decision.comment if decision else None) or "",
+    )
     return rejected_plugin
 
 

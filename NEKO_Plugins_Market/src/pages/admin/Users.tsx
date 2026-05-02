@@ -10,7 +10,9 @@ import {
   Ban,
   CheckCircle,
   Edit,
-  Trash2
+  Trash2,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,12 +46,24 @@ import {
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { adminApi, type User as UserType } from "@/services/api";
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<UserType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -61,16 +75,34 @@ export default function AdminUsers() {
   });
 
   useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+      setPage(1);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [debouncedSearch, page, pageSize]);
 
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
-      const data = await adminApi.getAllUsers();
-      setUsers(data);
+      const data = await adminApi.getUsers({
+        q: debouncedSearch || undefined,
+        page,
+        page_size: pageSize
+      });
+      setUsers(data.items);
+      setTotal(data.total);
+      setTotalPages(data.total_pages ?? 0);
     } catch (error) {
       console.error("获取用户列表失败:", error);
+      setUsers([]);
+      setTotal(0);
+      setTotalPages(0);
     } finally {
       setIsLoading(false);
     }
@@ -91,7 +123,7 @@ export default function AdminUsers() {
     if (!selectedUser) return;
     try {
       await adminApi.updateUser(selectedUser.id, editForm);
-      fetchUsers();
+      await fetchUsers();
       setIsEditOpen(false);
     } catch (error) {
       console.error("更新用户失败:", error);
@@ -102,7 +134,7 @@ export default function AdminUsers() {
     if (!selectedUser) return;
     try {
       await adminApi.deleteUser(selectedUser.id);
-      fetchUsers();
+      await fetchUsers();
       setIsDeleteOpen(false);
     } catch (error) {
       console.error("删除用户失败:", error);
@@ -112,17 +144,11 @@ export default function AdminUsers() {
   const handleToggleActive = async (user: UserType) => {
     try {
       await adminApi.updateUser(user.id, { is_active: !user.is_active });
-      fetchUsers();
+      await fetchUsers();
     } catch (error) {
       console.error("切换用户状态失败:", error);
     }
   };
-
-  const filteredUsers = users.filter(
-    (user) =>
-      user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   return (
     <div className="space-y-6">
@@ -151,6 +177,33 @@ export default function AdminUsers() {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              共 {total} 个用户
+              {debouncedSearch && <span>，正在搜索 “{debouncedSearch}”</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              <span>每页</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(value) => {
+                  setPageSize(Number(value));
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-8 w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           {isLoading ? (
             <div className="text-center py-8">加载中...</div>
           ) : (
@@ -166,14 +219,14 @@ export default function AdminUsers() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredUsers.length === 0 ? (
+                {users.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8">
                       暂无用户数据
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredUsers.map((user) => (
+                  users.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -264,6 +317,34 @@ export default function AdminUsers() {
                 )}
               </TableBody>
             </Table>
+          )}
+
+          {!isLoading && totalPages > 1 && (
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-muted-foreground">
+                第 {page} / {totalPages} 页
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page <= 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  上一页
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={page >= totalPages}
+                >
+                  下一页
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

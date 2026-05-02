@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional, List
+from typing import Any, Optional, List
 from datetime import datetime
 
 from app.models.plugin import PluginStatus
@@ -80,6 +80,7 @@ class Plugin(BaseModel):
     created_at: datetime
     updated_at: datetime
     published_at: Optional[datetime]
+    review_summary: Optional[dict[str, Any]] = None
 
 
 class PluginList(Plugin):
