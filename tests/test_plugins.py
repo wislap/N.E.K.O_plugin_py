@@ -65,6 +65,15 @@ async def test_plugin_create_approve_list_and_download(
     plugin = create_response.json()
     assert plugin["status"] == "pending"
 
+    my_plugins_response = await client.get(
+        "/api/v1/plugins/mine",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert my_plugins_response.status_code == 200
+    my_plugins = my_plugins_response.json()
+    assert len(my_plugins) == 1
+    assert my_plugins[0]["slug"] == "demo-plugin"
+
     pending_list = await client.get("/api/v1/plugins")
     assert pending_list.status_code == 200
     assert pending_list.json()["total"] == 0

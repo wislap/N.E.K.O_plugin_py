@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional
 from datetime import datetime
 
@@ -25,22 +25,20 @@ class ReviewUpdate(BaseModel):
 
 
 class ReviewAuthor(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     username: str
     display_name: Optional[str]
     avatar_url: Optional[str]
-    
-    class Config:
-        from_attributes = True
 
 
 class Review(ReviewBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     plugin_id: int
     author_id: int
     created_at: datetime
     updated_at: datetime
     author: Optional[ReviewAuthor] = None
-    
-    class Config:
-        from_attributes = True

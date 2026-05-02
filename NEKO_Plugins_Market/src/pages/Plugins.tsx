@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Search, Grid3X3, List, SlidersHorizontal } from 'lucide-react';
 import { PluginCard } from '@/components/PluginCard';
 import { Input } from '@/components/ui/input';
@@ -11,7 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { plugins, zones } from '@/data';
+import { zones } from '@/data';
+import { pluginsApi } from '@/services/api';
+import type { Plugin } from '@/types';
+import { listContainer, softReveal } from '@/lib/animations';
 
 type ViewMode = 'grid' | 'list';
 type SortOption = 'default' | 'downloads' | 'likes' | 'latest';
@@ -23,6 +27,9 @@ export function Plugins() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedZone, setSelectedZone] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [plugins, setPlugins] = useState<Plugin[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
   const itemsPerPage = 9;
 
   // Initialize from URL params
@@ -37,6 +44,36 @@ export function Plugins() {
       setSortBy(sort);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchPlugins() {
+      try {
+        setIsLoading(true);
+        setErrorMessage('');
+        const data = await pluginsApi.list({ page_size: 100, sort_by: 'created_at', sort_order: 'desc' });
+        if (isMounted) {
+          setPlugins(data.items);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setErrorMessage(error instanceof Error ? error.message : '插件列表加载失败');
+          setPlugins([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    fetchPlugins();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Filter and sort plugins
   const filteredPlugins = useMemo(() => {
@@ -231,8 +268,19 @@ export function Plugins() {
         </div>
 
         {/* Plugin Grid/List */}
-        {paginatedPlugins.length > 0 ? (
-          <div
+        {isLoading ? (
+          <div className="text-center py-20">
+            <p className="text-slate-400 text-lg">正在加载插件...</p>
+          </div>
+        ) : errorMessage ? (
+          <div className="text-center py-20">
+            <p className="text-red-400 text-lg">{errorMessage}</p>
+          </div>
+        ) : paginatedPlugins.length > 0 ? (
+          <motion.div
+            variants={listContainer}
+            initial="initial"
+            animate="animate"
             className={
               viewMode === 'grid'
                 ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
@@ -242,11 +290,16 @@ export function Plugins() {
             {paginatedPlugins.map((plugin) => (
               <PluginCard key={plugin.id} plugin={plugin} />
             ))}
-          </div>
+          </motion.div>
         ) : (
-          <div className="text-center py-20">
+          <motion.div
+            variants={softReveal}
+            initial="initial"
+            animate="animate"
+            className="text-center py-20"
+          >
             <p className="text-slate-400 text-lg">没有找到匹配的插件</p>
-          </div>
+          </motion.div>
         )}
 
         {/* Pagination */}

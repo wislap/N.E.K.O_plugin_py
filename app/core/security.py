@@ -6,10 +6,13 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.core.time import utc_now
 from app.core.database import get_db
 from app.models.user import User
+from app.models.permission import PermissionGroup
 
 # 密码加密上下文
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -34,9 +37,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = utc_now() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = utc_now() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     to_encode.update({
         "exp": expire,
@@ -55,7 +58,7 @@ def create_refresh_token(data: dict) -> str:
     from app.core.jwt_key_manager import jwt_key_manager
     
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=7)  # 刷新令牌7天有效期
+    expire = utc_now() + timedelta(days=7)  # 刷新令牌7天有效期
     to_encode.update({
         "exp": expire,
         "type": "refresh",
@@ -146,7 +149,15 @@ async def get_current_user(
         raise credentials_exception
     
     # 查询用户
-    result = await db.execute(select(User).where(User.id == int(user_id)))
+    result = await db.execute(
+        select(User)
+        .options(
+            selectinload(User.permission_groups).selectinload(PermissionGroup.permissions),
+            selectinload(User.permission_groups).selectinload(PermissionGroup.inherited_groups),
+            selectinload(User.permission_groups).selectinload(PermissionGroup.parent),
+        )
+        .where(User.id == int(user_id))
+    )
     user = result.scalar_one_or_none()
     
     if user is None:

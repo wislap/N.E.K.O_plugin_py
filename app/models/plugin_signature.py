@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class PluginSignature(Base):
@@ -33,7 +34,7 @@ class PluginSignature(Base):
     revoke_reason = Column(Text, nullable=True)  # 撤销原因
     
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     verified_at = Column(DateTime, nullable=True)  # 最后验证时间
     
     # 关系
@@ -60,7 +61,7 @@ class ServerKeyPair(Base):
     is_default = Column(Boolean, default=False)  # 是否默认密钥
     
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     activated_at = Column(DateTime, nullable=True)
     deactivated_at = Column(DateTime, nullable=True)
     

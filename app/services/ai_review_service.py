@@ -7,6 +7,7 @@ from datetime import datetime
 from enum import Enum
 
 from app.core.config import settings
+from app.core.time import utc_now
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -383,7 +384,7 @@ class AIReviewService:
             review_result = json.loads(content)
             
             # 添加元数据
-            review_result["reviewed_at"] = datetime.utcnow().isoformat()
+            review_result["reviewed_at"] = utc_now().isoformat()
             review_result["model"] = self.model
             
             return review_result

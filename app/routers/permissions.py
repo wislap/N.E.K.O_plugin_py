@@ -4,6 +4,8 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from typing import List, Optional
 
 from app.core.database import get_db
@@ -63,11 +65,10 @@ async def list_permission_groups(
     current_user: User = Depends(get_current_user)
 ):
     """获取权限组列表"""
-    service = PermissionService()
-    # TODO: 添加服务方法获取所有权限组
-    from sqlalchemy import select
     from app.models.permission import PermissionGroup
-    result = await db.execute(select(PermissionGroup))
+    result = await db.execute(
+        select(PermissionGroup).options(selectinload(PermissionGroup.permissions))
+    )
     return list(result.scalars().all())
 
 

@@ -6,6 +6,7 @@ from datetime import datetime
 from app.models.plugin_signature import PluginSignature, ServerKeyPair
 from app.models.plugin import Plugin
 from app.core.crypto import CodeSignatureService, generate_server_keypair
+from app.core.time import utc_now
 from app.services.github_service import GitHubService
 
 
@@ -44,7 +45,7 @@ class SignatureService:
             private_key_encrypted=private_key,  # 应该加密
             is_active=True,
             is_default=set_as_default,
-            activated_at=datetime.utcnow()
+            activated_at=utc_now()
         )
         
         # 如果设置为默认，取消其他默认密钥
@@ -123,7 +124,7 @@ class SignatureService:
             raise ValueError("密钥对不存在")
         
         keypair.is_active = False
-        keypair.deactivated_at = datetime.utcnow()
+        keypair.deactivated_at = utc_now()
         
         await db.commit()
         await db.refresh(keypair)
@@ -343,7 +344,7 @@ class SignatureService:
         )
         
         # 更新验证时间
-        sig_record.verified_at = datetime.utcnow()
+        sig_record.verified_at = utc_now()
         await db.commit()
         
         # 计算当前文件哈希
@@ -382,7 +383,7 @@ class SignatureService:
             raise ValueError("签名记录不存在")
         
         sig.is_valid = False
-        sig.revoked_at = datetime.utcnow()
+        sig.revoked_at = utc_now()
         sig.revoke_reason = reason
         
         await db.commit()

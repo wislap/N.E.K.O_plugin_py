@@ -1,11 +1,35 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { ArrowRight, TrendingUp } from 'lucide-react';
 import { PluginCard } from '@/components/PluginCard';
-import { getPopularPlugins } from '@/data';
 import { Button } from '@/components/ui/button';
+import { pluginsApi } from '@/services/api';
+import type { Plugin } from '@/types';
+import { listContainer } from '@/lib/animations';
 
 export function PopularPlugins() {
-  const plugins = getPopularPlugins(6);
+  const [plugins, setPlugins] = useState<Plugin[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    pluginsApi.popular(6)
+      .then((data) => {
+        if (isMounted) {
+          setPlugins(data);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setPlugins([]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <section className="py-20 bg-[#0a0a12]">
@@ -28,11 +52,19 @@ export function PopularPlugins() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {plugins.map((plugin) => (
-            <PluginCard key={plugin.id} plugin={plugin} />
-          ))}
-        </div>
+        {plugins.length > 0 && (
+          <motion.div
+            variants={listContainer}
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true, margin: '-80px' }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            {plugins.map((plugin) => (
+              <PluginCard key={plugin.id} plugin={plugin} />
+            ))}
+          </motion.div>
+        )}
       </div>
     </section>
   );

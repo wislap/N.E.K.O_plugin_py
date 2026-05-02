@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class Category(Base):
@@ -16,8 +17,8 @@ class Category(Base):
     sort_order = Column(Integer, default=0)
     
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     
     # 关系
     plugins = relationship("Plugin", secondary="plugin_categories", back_populates="categories")

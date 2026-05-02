@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.time import utc_now
 from app.core.security import get_current_user, require_permission
 from app.models.user import User
 from app.services.log_cleanup_service import log_cleanup_service
@@ -60,7 +61,7 @@ async def cleanup_logs(
             }
         else:
             # 清理指定类型的日志
-            before_date = datetime.utcnow()
+            before_date = utc_now()
             deleted = await log_cleanup_service.cleanup_logs_by_date(
                 db, log_type, before_date
             )

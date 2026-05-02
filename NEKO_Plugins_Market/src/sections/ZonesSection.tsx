@@ -1,7 +1,34 @@
+import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { ZoneCard } from '@/components/ZoneCard';
-import { zones } from '@/data';
+import { zones as fallbackZones } from '@/data';
+import { zonesApi } from '@/services/api';
+import type { Zone } from '@/types';
+import { listContainer } from '@/lib/animations';
 
 export function ZonesSection() {
+  const [zones, setZones] = useState<Zone[]>(fallbackZones);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    zonesApi.list()
+      .then((data) => {
+        if (isMounted && data.length > 0) {
+          setZones(data);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setZones(fallbackZones);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <section className="py-20 bg-[#0F0F1A]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -14,11 +41,17 @@ export function ZonesSection() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <motion.div
+          variants={listContainer}
+          initial="initial"
+          whileInView="animate"
+          viewport={{ once: true, margin: '-80px' }}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4"
+        >
           {zones.map((zone) => (
             <ZoneCard key={zone.id} zone={zone} />
           ))}
-        </div>
+        </motion.div>
       </div>
     </section>
   );

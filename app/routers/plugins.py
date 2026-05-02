@@ -80,6 +80,18 @@ async def get_newest_plugins(
     return plugins
 
 
+@router.get("/plugins/mine", response_model=List[PluginList])
+async def get_my_plugins(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    获取当前用户提交的插件列表
+    """
+    plugins = await PluginService.get_plugins_by_author(db, current_user.id)
+    return plugins
+
+
 @router.get("/plugins/{plugin_id}", response_model=PluginDetail)
 async def get_plugin(
     plugin_id: int,

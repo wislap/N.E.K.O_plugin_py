@@ -1,7 +1,7 @@
 """
 权限系统 Schema
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -20,13 +20,12 @@ class PermissionCreate(PermissionBase):
 
 
 class PermissionResponse(PermissionBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     is_active: bool
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # ========== Permission Group Schemas ==========
@@ -49,6 +48,8 @@ class PermissionGroupUpdate(BaseModel):
 
 
 class PermissionGroupResponse(PermissionGroupBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     parent_id: Optional[int]
     is_active: bool
@@ -56,9 +57,6 @@ class PermissionGroupResponse(PermissionGroupBase):
     created_at: datetime
     updated_at: datetime
     permissions: List[PermissionResponse] = []
-
-    class Config:
-        from_attributes = True
 
 
 # ========== User Permission Schemas ==========
@@ -78,6 +76,8 @@ class UserPermissionsResponse(BaseModel):
 # ========== Audit Log Schemas ==========
 
 class PermissionAuditLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     action: str
     target_type: str
@@ -85,6 +85,3 @@ class PermissionAuditLogResponse(BaseModel):
     operator_id: int
     details: Optional[str]
     created_at: datetime
-
-    class Config:
-        from_attributes = True

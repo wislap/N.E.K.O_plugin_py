@@ -5,6 +5,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Text, Float, Boolean
 from datetime import datetime
 
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class AISandboxLog(Base):
@@ -33,7 +34,7 @@ class AISandboxLog(Base):
     memory_usage = Column(Integer, nullable=True)  # 内存使用（MB）
     
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, desc
 
 from app.core.config import settings
+from app.core.time import utc_now
 from app.models.jwt_key import JWTKeyRecord
 
 
@@ -56,7 +57,7 @@ class JWTKeyManager:
         
         # 检查密钥是否需要轮换（默认 30 天）
         rotation_days = getattr(settings, 'JWT_KEY_ROTATION_DAYS', 30)
-        rotation_threshold = datetime.utcnow() - timedelta(days=rotation_days)
+        rotation_threshold = utc_now() - timedelta(days=rotation_days)
         
         if primary_key.created_at < rotation_threshold:
             await self._rotate_key(db)
@@ -74,7 +75,7 @@ class JWTKeyManager:
             secret_key=secret,
             is_active=True,
             is_primary=set_as_primary,
-            activated_at=datetime.utcnow() if set_as_primary else None
+            activated_at=utc_now() if set_as_primary else None
         )
         
         db.add(key_record)
@@ -135,7 +136,7 @@ class JWTKeyManager:
         for key in all_keys:
             if key.id not in keys_to_keep:
                 key.is_active = False
-                key.deactivated_at = datetime.utcnow()
+                key.deactivated_at = utc_now()
     
     async def _load_primary_key(self, db: AsyncSession):
         """加载主密钥到内存"""

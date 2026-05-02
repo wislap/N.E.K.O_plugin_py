@@ -18,10 +18,11 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 // RatingBadge component removed - ratings now displayed inline
-import { getPluginById, getReviewsByPluginId } from '@/data';
 import { formatDate, formatNumber, getZoneById } from '@/lib/utils';
 import { marked } from 'marked';
 import 'highlight.js/styles/github-dark.css';
+import { pluginsApi } from '@/services/api';
+import type { Plugin, Review } from '@/types';
 
 const ratingColors: Record<string, string> = {
   S: '#FFD700',
@@ -35,21 +36,67 @@ export function PluginDetail() {
   const { id } = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState('readme');
   const [reviewContent, setReviewContent] = useState('');
-
-  const plugin = id ? getPluginById(id) : undefined;
-  const pluginReviews = id ? getReviewsByPluginId(id) : [];
+  const [plugin, setPlugin] = useState<Plugin | null>(null);
+  const [pluginReviews] = useState<Review[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
   const zone = plugin ? getZoneById(plugin.zone) : undefined;
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [id]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchPlugin() {
+      if (!id) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setErrorMessage('');
+        const data = await pluginsApi.getById(id);
+        if (isMounted) {
+          setPlugin(data);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setPlugin(null);
+          setErrorMessage(error instanceof Error ? error.message : '插件详情加载失败');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    fetchPlugin();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
+
+  if (isLoading) {
+    return (
+      <main className="min-h-screen bg-[#0F0F1A] pt-24 pb-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <p className="text-slate-400 text-lg">正在加载插件详情...</p>
+        </div>
+      </main>
+    );
+  }
+
   if (!plugin) {
     return (
       <main className="min-h-screen bg-[#0F0F1A] pt-24 pb-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-2xl font-bold text-white mb-4">插件未找到</h1>
-          <p className="text-slate-400 mb-6">该插件不存在或已被删除</p>
+          <p className="text-slate-400 mb-6">{errorMessage || '该插件不存在或已被删除'}</p>
           <Link to="/plugins">
             <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
               <ChevronLeft className="w-4 h-4 mr-2" />

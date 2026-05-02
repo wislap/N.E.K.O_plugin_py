@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.models.user import User
+from app.core.time import utc_now
 from app.core.security import (
     verify_password, 
     create_access_token, 
@@ -36,7 +37,7 @@ class AuthService:
             return None
         
         # 更新最后登录时间
-        user.last_login = datetime.utcnow()
+        user.last_login = utc_now()
         await db.commit()
         
         return user

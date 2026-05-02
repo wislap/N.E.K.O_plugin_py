@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, ConfigDict, Field, EmailStr
 from typing import Optional
 from datetime import datetime
 
@@ -26,6 +26,8 @@ class UserLogin(BaseModel):
 
 
 class User(UserBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     avatar_url: Optional[str]
     bio: Optional[str]
@@ -36,9 +38,6 @@ class User(UserBase):
     updated_at: datetime
     last_login: Optional[datetime]
     plugin_count: Optional[int] = 0
-    
-    class Config:
-        from_attributes = True
 
 
 class Token(BaseModel):

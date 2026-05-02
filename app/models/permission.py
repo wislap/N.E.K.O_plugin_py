@@ -7,6 +7,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 # 权限组与子权限关联表
@@ -52,8 +53,8 @@ class Permission(Base):
     is_active = Column(Boolean, default=True)
     
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     
     # 关系
     groups = relationship(
@@ -88,8 +89,8 @@ class PermissionGroup(Base):
     is_system = Column(Boolean, default=False)  # 系统内置权限组，不可删除
     
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     
     # 关系
     permissions = relationship(
@@ -173,7 +174,7 @@ class PermissionAuditLog(Base):
     details = Column(Text, nullable=True)
     
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     
     def __repr__(self):
         return f"<PermissionAuditLog(action='{self.action}', target_type='{self.target_type}')>"

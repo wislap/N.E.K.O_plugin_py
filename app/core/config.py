@@ -1,9 +1,11 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List, Optional
 import secrets
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
     PROJECT_NAME: str = "N.E.K.O Plugin Market"
     VERSION: str = "1.0.0"
     
@@ -58,10 +60,6 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: Optional[str] = None
     SMTP_TLS: bool = True
     SMTP_FROM: Optional[str] = None  # 发件人地址
-    
-    class Config:
-        env_file = ".env"
-        extra = "ignore"  # 忽略额外的环境变量
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

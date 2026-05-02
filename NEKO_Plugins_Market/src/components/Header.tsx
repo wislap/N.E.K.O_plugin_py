@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Github, Menu, X, Cat, User } from 'lucide-react';
+import { Search, Github, Menu, X, Cat, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { authApi, type User as ApiUser } from '@/services/api';
 
 export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentUser, setCurrentUser] = useState<ApiUser | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -16,6 +18,52 @@ export function Header() {
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function syncUser() {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setCurrentUser(null);
+        return;
+      }
+
+      const cached = localStorage.getItem('currentUser');
+      if (cached) {
+        try {
+          setCurrentUser(JSON.parse(cached) as ApiUser);
+        } catch {
+          localStorage.removeItem('currentUser');
+        }
+      }
+
+      try {
+        const user = await authApi.getCurrentUser();
+        if (isMounted) {
+          setCurrentUser(user);
+          localStorage.setItem('currentUser', JSON.stringify(user));
+        }
+      } catch {
+        if (isMounted) {
+          setCurrentUser(null);
+          localStorage.removeItem('token');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('currentUser');
+        }
+      }
+    }
+
+    syncUser();
+    window.addEventListener('auth:changed', syncUser);
+    window.addEventListener('storage', syncUser);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('auth:changed', syncUser);
+      window.removeEventListener('storage', syncUser);
+    };
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -31,6 +79,20 @@ export function Header() {
     { label: '上传', href: '/upload' },
     { label: '文档', href: 'https://project-neko.online/plugins/', external: true },
   ];
+  const authedNavLinks = currentUser
+    ? [...navLinks.slice(0, 3), { label: '我的插件', href: '/my/plugins' }, navLinks[3]]
+    : navLinks;
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('currentUser');
+    setCurrentUser(null);
+    window.dispatchEvent(new Event('auth:changed'));
+    navigate('/');
+  };
+
+  const userLabel = currentUser?.display_name || currentUser?.username;
 
   return (
     <header
@@ -68,7 +130,7 @@ export function Header() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-1">
-            {navLinks.map((link) => (
+            {authedNavLinks.map((link) => (
               link.external ? (
                 <a
                   key={link.label}
@@ -97,13 +159,35 @@ export function Header() {
             >
               <Github className="w-5 h-5" />
             </a>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="ml-2 text-slate-300 hover:text-white hover:bg-white/5"
-            >
-              <User className="w-5 h-5" />
-            </Button>
+            {currentUser ? (
+              <div className="ml-2 flex items-center gap-2">
+                <div className="hidden lg:flex items-center gap-2 rounded-full bg-white/5 px-3 py-2 text-sm text-slate-200">
+                  <User className="w-4 h-4" />
+                  <span className="max-w-28 truncate">{userLabel}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-slate-300 hover:text-white hover:bg-white/5"
+                  onClick={logout}
+                >
+                  <LogOut className="w-5 h-5" />
+                </Button>
+              </div>
+            ) : (
+              <div className="ml-2 flex items-center gap-2">
+                <Link to="/login">
+                  <Button variant="ghost" className="text-slate-300 hover:text-white hover:bg-white/5">
+                    登录
+                  </Button>
+                </Link>
+                <Link to="/register">
+                  <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                    注册
+                  </Button>
+                </Link>
+              </div>
+            )}
           </nav>
 
           {/* Mobile Menu Button */}
@@ -131,7 +215,7 @@ export function Header() {
               </div>
             </form>
             <nav className="flex flex-col gap-2">
-              {navLinks.map((link) => (
+              {authedNavLinks.map((link) => (
                 link.external ? (
                   <a
                     key={link.label}
@@ -162,6 +246,36 @@ export function Header() {
                 <Github className="w-4 h-4" />
                 GitHub
               </a>
+              {currentUser ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  退出登录
+                </button>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 px-4 pt-2">
+                  <Link
+                    to="/login"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="rounded-lg border border-slate-700 px-3 py-2 text-center text-sm text-slate-300 hover:bg-white/5"
+                  >
+                    登录
+                  </Link>
+                  <Link
+                    to="/register"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="rounded-lg bg-primary px-3 py-2 text-center text-sm text-primary-foreground"
+                  >
+                    注册
+                  </Link>
+                </div>
+              )}
             </nav>
           </div>
         )}

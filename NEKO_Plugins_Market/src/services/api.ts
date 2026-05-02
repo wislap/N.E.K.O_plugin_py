@@ -1,3 +1,5 @@
+import type { Plugin as MarketPlugin, Rating, Zone } from "@/types";
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
 export interface User {
@@ -21,10 +23,15 @@ export interface Plugin {
   author_id: number;
   author_name: string;
   version: string;
+  download_url?: string | null;
   icon_url?: string | null;
   repo_url?: string | null;
   readme?: string | null;
+  zone_id?: number | null;
+  zone_slug?: string | null;
+  tags?: string[];
   download_count: number;
+  likes: number;
   rating_average: number;
   rating_count: number;
   status: "pending" | "approved" | "rejected" | "disabled" | string;
@@ -83,6 +90,13 @@ interface LoginRequest {
   password: string;
 }
 
+interface RegisterRequest {
+  username: string;
+  email: string;
+  password: string;
+  display_name?: string;
+}
+
 interface LoginResponse {
   user: User;
   access_token: string;
@@ -93,9 +107,36 @@ interface LoginResponse {
 interface PaginatedResponse<T> {
   items: T[];
   total: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
 type RequestBody = unknown;
+
+interface PluginCreateRequest {
+  name: string;
+  slug: string;
+  description?: string;
+  short_description?: string;
+  repo_url?: string;
+  zone_id?: number;
+  zone_slug?: string;
+  tags?: string[];
+}
+
+type PluginQuery = {
+  q?: string;
+  category?: string;
+  author?: string;
+  sort_by?: "created_at" | "download_count" | "rating_average" | "name";
+  sort_order?: "asc" | "desc";
+  featured_only?: boolean;
+  page?: number;
+  page_size?: number;
+};
 
 function getToken() {
   return localStorage.getItem("token");
@@ -159,6 +200,82 @@ function normalizePlugins(data: Plugin[] | PaginatedResponse<Plugin>): Plugin[] 
   return Array.isArray(data) ? data : data.items;
 }
 
+function fallbackRating(): Rating {
+  return {
+    functionality: "B",
+    security: "B",
+    documentation: "B",
+    ratedAt: new Date(0).toISOString()
+  };
+}
+
+function zoneSlugFromId(zoneId?: number | null): MarketPlugin["zone"] {
+  const zones: MarketPlugin["zone"][] = ["game", "companion", "function", "entertainment", "tool"];
+  if (!zoneId || zoneId < 1 || zoneId > zones.length) {
+    return "function";
+  }
+  return zones[zoneId - 1];
+}
+
+function githubOwner(repoUrl?: string | null) {
+  if (!repoUrl) {
+    return "";
+  }
+
+  try {
+    const url = new URL(repoUrl);
+    return url.hostname === "github.com" ? url.pathname.split("/").filter(Boolean)[0] ?? "" : "";
+  } catch {
+    return "";
+  }
+}
+
+function githubProfile(repoUrl?: string | null) {
+  const owner = githubOwner(repoUrl);
+  return owner ? `https://github.com/${owner}` : "";
+}
+
+function toMarketPlugin(plugin: Plugin): MarketPlugin {
+  const description = plugin.description ?? plugin.short_description ?? "";
+  const rating = fallbackRating();
+
+  return {
+    id: String(plugin.id),
+    name: plugin.name,
+    description,
+    version: plugin.version,
+    author: {
+      name: plugin.author_name,
+      avatar: plugin.icon_url ?? "",
+      github: githubProfile(plugin.repo_url)
+    },
+    githubRepo: plugin.repo_url ?? "",
+    zone: (plugin.zone_slug as MarketPlugin["zone"] | null) ?? zoneSlugFromId(plugin.zone_id),
+    tags: plugin.tags ?? [],
+    downloads: plugin.download_count,
+    likes: plugin.likes ?? 0,
+    aiRating: rating,
+    adminRating: rating,
+    readme: plugin.readme ?? description,
+    createdAt: plugin.created_at,
+    updatedAt: plugin.updated_at,
+    isRecommended: Boolean(plugin.is_featured)
+  };
+}
+
+function queryString(params: PluginQuery) {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      searchParams.set(key, String(value));
+    }
+  });
+
+  const query = searchParams.toString();
+  return query ? `?${query}` : "";
+}
+
 function recentCount(items: Array<{ created_at: string }>) {
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   return items.filter((item) => new Date(item.created_at).getTime() >= weekAgo).length;
@@ -182,6 +299,10 @@ let rolesStore: Role[] = [
 ];
 
 export const authApi = {
+  register(data: RegisterRequest) {
+    return post<LoginResponse>("/auth/register", data);
+  },
+
   login(credentials: LoginRequest) {
     return post<LoginResponse>("/auth/login", credentials);
   },
@@ -192,6 +313,50 @@ export const authApi = {
 
   logout() {
     return post<{ message: string }>("/auth/logout");
+  }
+};
+
+export const pluginsApi = {
+  async list(params: PluginQuery = {}) {
+    const data = await request<PaginatedResponse<Plugin>>(`/plugins${queryString(params)}`);
+    return {
+      ...data,
+      items: data.items.map(toMarketPlugin)
+    };
+  },
+
+  async featured(limit = 6) {
+    const data = await request<Plugin[]>(`/plugins/featured?limit=${limit}`);
+    return data.map(toMarketPlugin);
+  },
+
+  async popular(limit = 6) {
+    const data = await request<Plugin[]>(`/plugins/popular?limit=${limit}`);
+    return data.map(toMarketPlugin);
+  },
+
+  async newest(limit = 6) {
+    const data = await request<Plugin[]>(`/plugins/newest?limit=${limit}`);
+    return data.map(toMarketPlugin);
+  },
+
+  async getById(id: string) {
+    const data = await request<Plugin>(`/plugins/${id}`);
+    return toMarketPlugin(data);
+  },
+
+  mine() {
+    return request<Plugin[]>("/plugins/mine");
+  },
+
+  create(data: PluginCreateRequest) {
+    return post<Plugin>("/plugins", data);
+  }
+};
+
+export const zonesApi = {
+  list() {
+    return request<Zone[]>("/zones");
   }
 };
 

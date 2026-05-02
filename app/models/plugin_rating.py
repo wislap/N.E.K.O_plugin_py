@@ -4,6 +4,7 @@ from datetime import datetime
 import enum
 
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class RatingGrade(str, enum.Enum):
@@ -31,7 +32,7 @@ class PluginRating(Base):
     documentation = Column(Enum(RatingGrade), default=RatingGrade.B)  # 文档完整性
     
     # 评分时间
-    rated_at = Column(DateTime, default=datetime.utcnow)
+    rated_at = Column(DateTime, default=utc_now)
     
     # 评分备注/理由
     notes = Column(Text, nullable=True)
@@ -40,8 +41,8 @@ class PluginRating(Base):
     reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     
     # 关系
     plugin = relationship("Plugin", back_populates="ratings")

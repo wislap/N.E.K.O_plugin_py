@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class Version(Base):
@@ -21,7 +22,7 @@ class Version(Base):
     max_app_version = Column(String(20), nullable=True)
     
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     
     # 关系
     plugin = relationship("Plugin", back_populates="versions")

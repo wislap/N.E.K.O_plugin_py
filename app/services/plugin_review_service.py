@@ -5,6 +5,7 @@ from datetime import datetime
 
 from app.models.plugin_review import PluginReview, PluginReviewHistory, ReviewStage
 from app.models.plugin import Plugin, PluginStatus
+from app.core.time import utc_now
 from app.services.github_service import GitHubService
 from app.services.ai_review_service import AIReviewService
 
@@ -133,7 +134,7 @@ class PluginReviewService:
                 db, review, ReviewStage.FETCHED, "仓库代码拉取完成"
             )
             
-            review.fetched_at = datetime.utcnow()
+            review.fetched_at = utc_now()
             await db.commit()
             
             return {
@@ -184,7 +185,7 @@ class PluginReviewService:
             review.ai_review_result = ai_result
             review.ai_score = int(final_score["final_score"])
             review.ai_recommendation = final_score["recommendation"]
-            review.ai_reviewed_at = datetime.utcnow()
+            review.ai_reviewed_at = utc_now()
             
             # 根据 AI 建议更新阶段
             if final_score["recommendation"] == "needs_revision":
@@ -193,7 +194,7 @@ class PluginReviewService:
             elif final_score["recommendation"] == "reject":
                 review.stage = ReviewStage.REJECTED
                 review.review_feedback = self._format_feedback(ai_result)
-                review.completed_at = datetime.utcnow()
+                review.completed_at = utc_now()
                 
                 # 更新插件状态
                 plugin = await db.get(Plugin, review.plugin_id)
@@ -243,7 +244,7 @@ class PluginReviewService:
             raise ValueError("当前状态不允许提交修改")
         
         review.revision_notes = revision_notes
-        review.revision_submitted_at = datetime.utcnow()
+        review.revision_submitted_at = utc_now()
         
         await self._transition_stage(
             db, review, ReviewStage.REVISION_SUBMITTED,
@@ -271,21 +272,21 @@ class PluginReviewService:
         
         review.manual_reviewer_id = reviewer_id
         review.manual_review_notes = notes
-        review.manual_reviewed_at = datetime.utcnow()
+        review.manual_reviewed_at = utc_now()
         
         if decision == "approve":
             review.stage = ReviewStage.APPROVED
-            review.completed_at = datetime.utcnow()
+            review.completed_at = utc_now()
             
             # 更新插件状态
             plugin = await db.get(Plugin, review.plugin_id)
             if plugin:
                 plugin.status = PluginStatus.APPROVED
-                plugin.published_at = datetime.utcnow()
+                plugin.published_at = utc_now()
                 
         elif decision == "reject":
             review.stage = ReviewStage.REJECTED
-            review.completed_at = datetime.utcnow()
+            review.completed_at = utc_now()
             
             # 更新插件状态
             plugin = await db.get(Plugin, review.plugin_id)
@@ -294,7 +295,7 @@ class PluginReviewService:
                 
         elif decision == "needs_revision":
             review.stage = ReviewStage.NEEDS_REVISION
-            review.revision_requested_at = datetime.utcnow()
+            review.revision_requested_at = utc_now()
         
         await self._add_history(
             db, review.plugin_id, review.id,

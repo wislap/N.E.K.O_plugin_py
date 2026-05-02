@@ -4,6 +4,7 @@ from datetime import datetime
 import enum
 
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class ReviewStage(str, enum.Enum):
@@ -49,7 +50,7 @@ class PluginReview(Base):
     manual_review_notes = Column(Text, nullable=True)
     
     # 时间戳
-    submitted_at = Column(DateTime, default=datetime.utcnow)
+    submitted_at = Column(DateTime, default=utc_now)
     fetched_at = Column(DateTime, nullable=True)
     ai_reviewed_at = Column(DateTime, nullable=True)
     revision_requested_at = Column(DateTime, nullable=True)
@@ -83,4 +84,4 @@ class PluginReviewHistory(Base):
     operator_type = Column(String(20), default="system")  # system/ai/user
     
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)

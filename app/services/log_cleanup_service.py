@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, and_
 
 from app.core.config import settings
+from app.core.time import utc_now
 from app.models.plugin_review import PluginReview, PluginReviewHistory
 from app.models.ai_sandbox_log import AISandboxLog
 from app.models.permission import PermissionAuditLog
@@ -97,7 +98,7 @@ class LogCleanupService:
             "sandbox_logs_deleted": 0,
             "permission_audit_logs_deleted": 0,
             "total_deleted": 0,
-            "cleanup_time": datetime.utcnow().isoformat()
+            "cleanup_time": utc_now().isoformat()
         }
         
         try:
@@ -129,7 +130,7 @@ class LogCleanupService:
         Returns:
             删除的记录数
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=self.review_log_retention_days)
+        cutoff_date = utc_now() - timedelta(days=self.review_log_retention_days)
         
         # 删除审核历史记录
         result = await db.execute(
@@ -165,7 +166,7 @@ class LogCleanupService:
         Returns:
             删除的记录数
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=self.sandbox_log_retention_days)
+        cutoff_date = utc_now() - timedelta(days=self.sandbox_log_retention_days)
         
         result = await db.execute(
             delete(AISandboxLog).where(
@@ -187,7 +188,7 @@ class LogCleanupService:
         Returns:
             删除的记录数
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=self.permission_audit_retention_days)
+        cutoff_date = utc_now() - timedelta(days=self.permission_audit_retention_days)
         
         result = await db.execute(
             delete(PermissionAuditLog).where(
@@ -227,9 +228,9 @@ class LogCleanupService:
         permission_audit_count = result.scalar()
         
         # 计算即将被清理的日志数量
-        cutoff_review = datetime.utcnow() - timedelta(days=self.review_log_retention_days)
-        cutoff_sandbox = datetime.utcnow() - timedelta(days=self.sandbox_log_retention_days)
-        cutoff_permission = datetime.utcnow() - timedelta(days=self.permission_audit_retention_days)
+        cutoff_review = utc_now() - timedelta(days=self.review_log_retention_days)
+        cutoff_sandbox = utc_now() - timedelta(days=self.sandbox_log_retention_days)
+        cutoff_permission = utc_now() - timedelta(days=self.permission_audit_retention_days)
         
         result = await db.execute(
             select(func.count()).select_from(PluginReviewHistory)

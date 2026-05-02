@@ -14,6 +14,7 @@ from enum import Enum
 import httpx
 
 from app.core.config import settings
+from app.core.time import utc_now
 from app.models.ai_sandbox_log import AISandboxLog
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ class SandboxTask:
     plugin_id: int
     task_type: str
     status: SandboxStatus = SandboxStatus.PENDING
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utc_now)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     result: Optional[Dict[str, Any]] = None
@@ -69,7 +70,7 @@ class AISandboxService:
         self._tasks: Dict[str, SandboxTask] = {}
         self._semaphore = asyncio.Semaphore(self.max_concurrent_tasks)
         self._daily_calls = 0
-        self._last_reset = datetime.utcnow()
+        self._last_reset = utc_now()
         
         # 内容安全过滤规则
         self._blocked_patterns = [
@@ -110,7 +111,7 @@ class AISandboxService:
     
     def _check_rate_limit(self) -> bool:
         """检查调用频率限制"""
-        now = datetime.utcnow()
+        now = utc_now()
         
         # 重置每日计数
         if now.date() > self._last_reset.date():
@@ -202,7 +203,7 @@ class AISandboxService:
         if not self._check_rate_limit():
             task.status = SandboxStatus.FAILED
             task.error = "超出每日调用限制"
-            task.completed_at = datetime.utcnow()
+            task.completed_at = utc_now()
             await self._log_task_complete(db_session, task)
             raise ValueError("超出每日 AI 调用限制")
         
@@ -210,7 +211,7 @@ class AISandboxService:
             # 使用信号量限制并发
             async with self._semaphore:
                 task.status = SandboxStatus.RUNNING
-                task.started_at = datetime.utcnow()
+                task.started_at = utc_now()
                 
                 # 记录任务开始
                 input_content = json.dumps({"args": str(args), "kwargs": str(kwargs)})
@@ -244,7 +245,7 @@ class AISandboxService:
                 
                 finally:
                     task.execution_time = time.time() - start_time
-                    task.completed_at = datetime.utcnow()
+                    task.completed_at = utc_now()
                     
                     # 记录任务完成
                     output_content = json.dumps(task.result) if task.result else None

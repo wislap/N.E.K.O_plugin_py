@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
 from datetime import datetime
 
@@ -12,6 +12,10 @@ class PluginBase(BaseModel):
     download_url: Optional[str] = Field(None, max_length=500)
     icon_url: Optional[str] = Field(None, max_length=500)
     repo_url: Optional[str] = Field(None, max_length=500, description="GitHub仓库地址，格式：https://github.com/用户名/n.e.k.o_plugin_xxx")
+    readme: Optional[str] = None
+    zone_id: Optional[int] = None
+    zone_slug: Optional[str] = Field(None, max_length=50)
+    tags: List[str] = []
 
 
 class PluginCreate(PluginBase):
@@ -26,29 +30,33 @@ class PluginUpdate(BaseModel):
     download_url: Optional[str] = Field(None, max_length=500)
     icon_url: Optional[str] = Field(None, max_length=500)
     repo_url: Optional[str] = Field(None, max_length=500)
+    readme: Optional[str] = None
+    zone_id: Optional[int] = None
+    zone_slug: Optional[str] = Field(None, max_length=50)
+    tags: Optional[List[str]] = None
     category_ids: Optional[List[int]] = None
 
 
 class PluginCategory(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     slug: str
-    
-    class Config:
-        from_attributes = True
 
 
 class PluginAuthor(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     username: str
     display_name: Optional[str]
     avatar_url: Optional[str]
-    
-    class Config:
-        from_attributes = True
 
 
 class Plugin(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     slug: str
@@ -57,7 +65,14 @@ class Plugin(BaseModel):
     author_name: str
     version: str
     icon_url: Optional[str]
+    download_url: Optional[str]
+    repo_url: Optional[str]
+    readme: Optional[str]
+    zone_id: Optional[int]
+    zone_slug: Optional[str]
+    tags: List[str]
     download_count: int
+    likes: int
     rating_average: float
     rating_count: int
     status: PluginStatus
@@ -65,24 +80,19 @@ class Plugin(BaseModel):
     created_at: datetime
     updated_at: datetime
     published_at: Optional[datetime]
-    
-    class Config:
-        from_attributes = True
 
 
 class PluginList(Plugin):
+    model_config = ConfigDict(from_attributes=True)
+
     categories: List[PluginCategory] = []
-    
-    class Config:
-        from_attributes = True
 
 
 class PluginDetail(PluginList):
+    model_config = ConfigDict(from_attributes=True)
+
     description: Optional[str]
     author: PluginAuthor
-    
-    class Config:
-        from_attributes = True
 
 
 class PluginSearchParams(BaseModel):

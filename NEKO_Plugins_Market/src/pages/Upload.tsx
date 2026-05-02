@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Upload as UploadIcon,
   Github,
@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { zones } from '@/data';
+import { pluginsApi } from '@/services/api';
 
 const standardTags = [
   '游戏', '查询', '攻略', '辅助', '陪玩', '互动', '情感', '增强',
@@ -32,6 +33,9 @@ const standardTags = [
 ];
 
 export function Upload() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [githubUrl, setGithubUrl] = useState('');
   const [pluginName, setPluginName] = useState('');
   const [description, setDescription] = useState('');
@@ -39,6 +43,26 @@ export function Upload() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const slugify = (value: string) =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 100);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      const next = `${location.pathname}${location.search}`;
+      navigate(`/login?next=${encodeURIComponent(next)}`, { replace: true });
+      return;
+    }
+
+    setIsCheckingAuth(false);
+  }, [location.pathname, location.search, navigate]);
 
   const handleTagToggle = (tag: string) => {
     setSelectedTags((prev) =>
@@ -51,12 +75,25 @@ export function Upload() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setErrorMessage('');
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    setIsSubmitting(false);
-    setShowSuccess(true);
+    try {
+      await pluginsApi.create({
+        name: pluginName.trim(),
+        slug: slugify(pluginName),
+        description: description.trim() || undefined,
+        short_description: description.trim().slice(0, 255) || undefined,
+        repo_url: githubUrl.trim(),
+        zone_slug: selectedZone,
+        tags: selectedTags
+      });
+      navigate('/my/plugins');
+      setShowSuccess(true);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '上传失败，请稍后重试');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isFormValid =
@@ -64,6 +101,16 @@ export function Upload() {
     pluginName.trim() &&
     selectedZone &&
     selectedTags.length > 0;
+
+  if (isCheckingAuth) {
+    return (
+      <main className="min-h-screen bg-[#0F0F1A] pt-24 pb-20">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <p className="text-slate-400 text-lg">正在确认登录状态...</p>
+        </div>
+      </main>
+    );
+  }
 
   if (showSuccess) {
     return (
@@ -126,7 +173,7 @@ export function Upload() {
             <div>
               <h3 className="text-blue-400 font-medium mb-1">上传须知</h3>
               <ul className="text-sm text-slate-400 space-y-1">
-                <li>• 插件必须托管在 GitHub 上</li>
+                <li>• 插件必须托管在 GitHub 上，仓库名格式为 n.e.k.o_plugin_xxx</li>
                 <li>• 仓库需要包含 README.md 和必要的配置文件</li>
                 <li>• 插件将通过 AI 和管理员双重审核</li>
                 <li>• 审核通常需要 1-3 个工作日</li>
@@ -137,6 +184,12 @@ export function Upload() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-8">
+          {errorMessage && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-300">
+              {errorMessage}
+            </div>
+          )}
+
           {/* GitHub Repository */}
           <div className="bg-[#1A1A2E] border border-slate-800/50 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-4">
@@ -158,7 +211,7 @@ export function Upload() {
                 <Input
                   id="github-url"
                   type="url"
-                  placeholder="https://github.com/username/repo-name"
+                  placeholder="https://github.com/username/n.e.k.o_plugin_demo"
                   value={githubUrl}
                   onChange={(e) => setGithubUrl(e.target.value)}
                   className="mt-2 bg-[#0F0F1A] border-slate-700 text-slate-200 placeholder:text-slate-600"

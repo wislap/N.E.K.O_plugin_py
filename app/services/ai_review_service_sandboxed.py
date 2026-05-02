@@ -9,6 +9,7 @@ from datetime import datetime
 
 from app.services.ai_sandbox_service import ai_sandbox_service, SandboxStatus
 from app.core.config import settings
+from app.core.time import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +230,7 @@ class AIReviewServiceSandboxed:
                 review_result = json.loads(content)
                 
                 # 添加元数据
-                review_result["reviewed_at"] = datetime.utcnow().isoformat()
+                review_result["reviewed_at"] = utc_now().isoformat()
                 review_result["model"] = self.model
                 review_result["task_id"] = result.get("task_id")
                 review_result["execution_time"] = result.get("execution_time")

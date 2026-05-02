@@ -4,6 +4,7 @@ from datetime import datetime
 import enum
 
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class PluginStatus(str, enum.Enum):
@@ -53,8 +54,8 @@ class Plugin(Base):
     is_featured = Column(Integer, default=0)  # 是否推荐
     
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     published_at = Column(DateTime, nullable=True)
     
     # 关系
@@ -85,6 +86,11 @@ class Plugin(Base):
             if rating.rating_type == 'admin':
                 return rating.to_dict()
         return None
+
+    @property
+    def zone_slug(self):
+        """获取插件分区 slug"""
+        return self.zone.slug if self.zone else None
     
     def to_frontend_dict(self):
         """转换为前端需要的格式"""

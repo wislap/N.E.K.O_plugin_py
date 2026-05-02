@@ -5,6 +5,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from datetime import datetime
 
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class JWTKeyRecord(Base):
@@ -22,7 +23,7 @@ class JWTKeyRecord(Base):
     is_primary = Column(Boolean, default=False)  # 是否主密钥（用于签发新令牌）
     
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
     activated_at = Column(DateTime, nullable=True)
     deactivated_at = Column(DateTime, nullable=True)
     

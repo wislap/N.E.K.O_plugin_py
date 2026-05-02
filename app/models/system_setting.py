@@ -6,6 +6,7 @@ from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean
 from datetime import datetime
 
 from app.core.database import Base
+from app.core.time import utc_now
 
 
 class SystemSetting(Base):
@@ -28,8 +29,8 @@ class SystemSetting(Base):
     group = Column(String(50), default='general', index=True)
     
     # 时间戳
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     updated_by = Column(Integer, nullable=True)  # 最后修改者ID
     
     def __repr__(self):

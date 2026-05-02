@@ -4,11 +4,19 @@
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
+from sqlalchemy.orm import selectinload
 from typing import List, Optional, Set, Dict, Any
 from datetime import datetime
 
-from app.models.permission import Permission, PermissionGroup, PermissionAuditLog
+from app.models.permission import (
+    Permission,
+    PermissionGroup,
+    PermissionAuditLog,
+    permission_group_items,
+    user_permission_groups,
+)
 from app.models.user import User
+from app.core.time import utc_now
 
 
 class PermissionService:
@@ -227,21 +235,29 @@ class PermissionService:
             is_system=False
         )
         db.add(group)
-        await db.commit()
-        await db.refresh(group)
+        await db.flush()
         
         # 添加权限
         if permission_codes:
+            permission_ids = []
             for perm_code in permission_codes:
                 permission = await self.get_permission_by_code(db, perm_code)
                 if permission:
-                    group.permissions.append(permission)
-            await db.commit()
+                    permission_ids.append(permission.id)
+            if permission_ids:
+                await db.execute(
+                    permission_group_items.insert(),
+                    [
+                        {"group_id": group.id, "permission_id": permission_id}
+                        for permission_id in permission_ids
+                    ],
+                )
         
         # 记录审计日志
         await self._log_action(db, 'create', 'group', group.id, None)
+        await db.commit()
         
-        return group
+        return await self.get_permission_group_by_id(db, group.id) or group
     
     async def get_permission_group_by_code(
         self,
@@ -260,7 +276,12 @@ class PermissionService:
         group_id: int
     ) -> Optional[PermissionGroup]:
         """通过ID获取权限组"""
-        return await db.get(PermissionGroup, group_id)
+        result = await db.execute(
+            select(PermissionGroup)
+            .options(selectinload(PermissionGroup.permissions))
+            .where(PermissionGroup.id == group_id)
+        )
+        return result.scalar_one_or_none()
     
     async def update_permission_group(
         self,
@@ -285,7 +306,7 @@ class PermissionService:
         if is_active is not None:
             group.is_active = is_active
         
-        group.updated_at = datetime.utcnow()
+        group.updated_at = utc_now()
         await db.commit()
         await db.refresh(group)
         
@@ -412,24 +433,48 @@ class PermissionService:
         user = await db.get(User, user_id)
         if not user:
             raise ValueError("用户不存在")
-        
-        # 清空现有权限组（保留系统组）
-        user.permission_groups = [
-            g for g in user.permission_groups if g.is_system
-        ]
-        
-        # 添加新的权限组
+
+        existing_result = await db.execute(
+            select(user_permission_groups.c.group_id)
+            .join(
+                PermissionGroup,
+                user_permission_groups.c.group_id == PermissionGroup.id,
+            )
+            .where(
+                user_permission_groups.c.user_id == user_id,
+                PermissionGroup.is_system == True,
+            )
+        )
+        preserved_group_ids = {row[0] for row in existing_result.all()}
+
+        requested_group_ids = set()
         for group_id in group_ids:
             group = await self.get_permission_group_by_id(db, group_id)
-            if group and group not in user.permission_groups:
-                user.permission_groups.append(group)
+            if group:
+                requested_group_ids.add(group.id)
+
+        target_group_ids = preserved_group_ids | requested_group_ids
+
+        await db.execute(
+            user_permission_groups.delete().where(
+                user_permission_groups.c.user_id == user_id
+            )
+        )
+        if target_group_ids:
+            await db.execute(
+                user_permission_groups.insert(),
+                [
+                    {"user_id": user_id, "group_id": group_id}
+                    for group_id in target_group_ids
+                ],
+            )
         
         await db.commit()
-        await db.refresh(user)
+        user = await self._get_user_with_permissions(db, user_id)
         
         # 记录审计日志
         await self._log_action(
-            db, 'grant', 'user', user.id,
+            db, 'grant', 'user', user_id,
             f"分配权限组: {group_ids}"
         )
         
@@ -441,7 +486,7 @@ class PermissionService:
         user_id: int
     ) -> Set[str]:
         """获取用户的所有权限代码"""
-        user = await db.get(User, user_id)
+        user = await self._get_user_with_permissions(db, user_id)
         if not user:
             return set()
         
@@ -454,11 +499,27 @@ class PermissionService:
         permission_code: str
     ) -> bool:
         """检查用户是否有指定权限"""
-        user = await db.get(User, user_id)
+        user = await self._get_user_with_permissions(db, user_id)
         if not user:
             return False
         
         return user.has_permission(permission_code)
+
+    async def _get_user_with_permissions(
+        self,
+        db: AsyncSession,
+        user_id: int
+    ) -> Optional[User]:
+        result = await db.execute(
+            select(User)
+            .options(
+                selectinload(User.permission_groups).selectinload(PermissionGroup.permissions),
+                selectinload(User.permission_groups).selectinload(PermissionGroup.inherited_groups),
+                selectinload(User.permission_groups).selectinload(PermissionGroup.parent),
+            )
+            .where(User.id == user_id)
+        )
+        return result.scalar_one_or_none()
     
     # ========== 审计日志 ==========
     

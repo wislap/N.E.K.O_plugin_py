@@ -1,10 +1,14 @@
 import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { PageTransition } from '@/components/PageTransition';
 import { Home } from '@/pages/Home';
 import { Plugins } from '@/pages/Plugins';
 import { PluginDetail } from '@/pages/PluginDetail';
 import { Upload } from '@/pages/Upload';
+import { Auth } from '@/pages/Auth';
+import { MyPlugins } from '@/pages/MyPlugins';
 import AdminLayout from '@/pages/admin/AdminLayout';
 import AdminLogin from '@/pages/admin/Login';
 import AdminDashboard from '@/pages/admin/Dashboard';
@@ -39,12 +43,17 @@ function MainLayout() {
   return (
     <>
       <Header />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/plugins" element={<Plugins />} />
-        <Route path="/plugin/:id" element={<PluginDetail />} />
-        <Route path="/upload" element={<Upload />} />
-      </Routes>
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
+          <Route path="/" element={<PageTransition><Home /></PageTransition>} />
+          <Route path="/plugins" element={<PageTransition><Plugins /></PageTransition>} />
+          <Route path="/plugin/:id" element={<PageTransition><PluginDetail /></PageTransition>} />
+          <Route path="/upload" element={<PageTransition><Upload /></PageTransition>} />
+          <Route path="/my/plugins" element={<PageTransition><MyPlugins /></PageTransition>} />
+          <Route path="/login" element={<PageTransition><Auth /></PageTransition>} />
+          <Route path="/register" element={<PageTransition><Auth /></PageTransition>} />
+        </Routes>
+      </AnimatePresence>
       <Footer />
     </>
   );
