@@ -7,6 +7,7 @@ from app.models.review import Review
 from app.models.plugin import Plugin
 from app.services.plugin_service import PluginService
 from app.services.notification_service import NotificationService
+from app.services.transactions import commit_or_rollback
 
 
 class ReviewService:
@@ -93,31 +94,30 @@ class ReviewService:
         if existing:
             raise ValueError("您已经对该插件进行过评分")
         
-        review = Review(
-            plugin_id=plugin_id,
-            author_id=author_id,
-            rating=rating,
-            title=title,
-            content=content
-        )
-        
-        db.add(review)
-        plugin = await db.get(Plugin, plugin_id)
-        if plugin and plugin.author_id != author_id:
-            NotificationService.add(
-                db,
-                user_id=plugin.author_id,
-                type="plugin_reviewed",
-                title="插件收到新评论",
-                content=f"你的插件「{plugin.name}」收到了一条 {rating:g} 分评论。",
-                target_url=f"/plugin/{plugin.id}",
+        async with commit_or_rollback(db):
+            review = Review(
+                plugin_id=plugin_id,
+                author_id=author_id,
+                rating=rating,
+                title=title,
+                content=content
             )
-        await db.commit()
+
+            db.add(review)
+            plugin = await db.get(Plugin, plugin_id)
+            if plugin and plugin.author_id != author_id:
+                NotificationService.add(
+                    db,
+                    user_id=plugin.author_id,
+                    type="plugin_reviewed",
+                    title="插件收到新评论",
+                    content=f"你的插件「{plugin.name}」收到了一条 {rating:g} 分评论。",
+                    target_url=f"/plugin/{plugin.id}",
+                )
+            await PluginService.update_rating(db, plugin_id, commit=False)
+
         await db.refresh(review)
-        
-        # 更新插件评分
-        await PluginService.update_rating(db, plugin_id)
-        
+
         refreshed = await ReviewService.get_review_by_id(db, review.id)
         return refreshed or review
     
@@ -130,19 +130,18 @@ class ReviewService:
         content: Optional[str] = None
     ) -> Review:
         """更新评论"""
-        if rating is not None:
-            review.rating = rating
-        if title is not None:
-            review.title = title
-        if content is not None:
-            review.content = content
-        
-        await db.commit()
+        async with commit_or_rollback(db):
+            if rating is not None:
+                review.rating = rating
+            if title is not None:
+                review.title = title
+            if content is not None:
+                review.content = content
+
+            await PluginService.update_rating(db, review.plugin_id, commit=False)
+
         await db.refresh(review)
-        
-        # 更新插件评分
-        await PluginService.update_rating(db, review.plugin_id)
-        
+
         refreshed = await ReviewService.get_review_by_id(db, review.id)
         return refreshed or review
     
@@ -150,11 +149,9 @@ class ReviewService:
     async def delete_review(db: AsyncSession, review: Review) -> None:
         """删除评论"""
         plugin_id = review.plugin_id
-        await db.delete(review)
-        await db.commit()
-        
-        # 更新插件评分
-        await PluginService.update_rating(db, plugin_id)
+        async with commit_or_rollback(db):
+            await db.delete(review)
+            await PluginService.update_rating(db, plugin_id, commit=False)
     
     @staticmethod
     async def get_rating_distribution(db: AsyncSession, plugin_id: int) -> dict:

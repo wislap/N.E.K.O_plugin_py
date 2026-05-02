@@ -1,8 +1,11 @@
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.models import Notification, Plugin, PluginReview, PluginReviewHistory, PluginStatus
+from app.services.notification_service import NotificationService
 from tests.conftest import create_test_user, grant_permission
 
 
@@ -29,6 +32,41 @@ async def test_create_plugin_requires_authentication(client: AsyncClient):
     )
 
     assert response.status_code in {401, 403}
+
+
+async def test_create_plugin_rolls_back_when_notification_fails(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    await create_test_user(
+        db_session,
+        username="atomic_owner",
+        email="atomic-owner@example.com",
+        is_admin=False,
+    )
+    owner_token = await login(client, "atomic_owner")
+
+    async def fail_notify_admins(*args, **kwargs):
+        raise RuntimeError("notification boom")
+
+    monkeypatch.setattr(NotificationService, "notify_admins", fail_notify_admins)
+
+    with pytest.raises(RuntimeError, match="notification boom"):
+        await client.post(
+            "/api/v1/plugins",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={
+                "name": "Atomic Create Plugin",
+                "slug": "atomic-create-plugin",
+                "description": "Should not persist when notification fails",
+            },
+        )
+
+    assert await db_session.scalar(
+        select(Plugin.id).where(Plugin.slug == "atomic-create-plugin")
+    ) is None
+    assert await db_session.scalar(select(Notification.id)) is None
 
 
 async def test_plugin_create_approve_list_and_download(
@@ -221,6 +259,63 @@ async def test_admin_reject_records_review_feedback_for_owner(
     my_plugin = my_plugins_response.json()[0]
     assert my_plugin["status"] == "rejected"
     assert my_plugin["review_summary"]["manual_review_notes"] == "缺少 README 和安装说明"
+
+
+async def test_admin_decision_rolls_back_when_notification_fails(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    await create_test_user(
+        db_session,
+        username="atomic_review_owner",
+        email="atomic-review-owner@example.com",
+        is_admin=False,
+    )
+    await create_test_user(
+        db_session,
+        username="atomic_review_admin",
+        email="atomic-review-admin@example.com",
+        is_admin=True,
+    )
+
+    owner_token = await login(client, "atomic_review_owner")
+    admin_token = await login(client, "atomic_review_admin")
+
+    create_response = await client.post(
+        "/api/v1/plugins",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={
+            "name": "Atomic Review Plugin",
+            "slug": "atomic-review-plugin",
+            "description": "Approval should not persist when notification fails",
+        },
+    )
+    assert create_response.status_code == 201
+    plugin_id = create_response.json()["id"]
+
+    def fail_add(*args, **kwargs):
+        raise RuntimeError("notification boom")
+
+    monkeypatch.setattr(NotificationService, "add", fail_add)
+
+    with pytest.raises(RuntimeError, match="notification boom"):
+        await client.post(
+            f"/api/v1/admin/plugins/{plugin_id}/approve",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"comment": "should rollback"},
+        )
+
+    plugin = await db_session.get(Plugin, plugin_id)
+    assert plugin is not None
+    assert plugin.status == PluginStatus.PENDING
+    assert plugin.published_at is None
+    assert await db_session.scalar(
+        select(PluginReview.id).where(PluginReview.plugin_id == plugin_id)
+    ) is None
+    assert await db_session.scalar(
+        select(PluginReviewHistory.id).where(PluginReviewHistory.plugin_id == plugin_id)
+    ) is None
 
 
 async def test_submit_review_requires_plugin_owner_or_admin(

@@ -8,6 +8,7 @@ from app.core.time import utc_now
 from app.services.github_service import GitHubService
 from app.services.ai_review_service import AIReviewService
 from app.services.notification_service import NotificationService
+from app.services.transactions import commit_or_rollback
 
 
 class PluginReviewService:
@@ -40,29 +41,29 @@ class PluginReviewService:
         if existing:
             raise ValueError("该插件已有进行中的审核")
         
-        # 创建审核记录
-        review = PluginReview(
-            plugin_id=plugin_id,
-            repo_url=repo_url,
-            repo_branch=repo_branch,
-            stage=ReviewStage.SUBMITTED
-        )
-        
-        db.add(review)
-        await db.flush()
-        
-        # 记录历史
-        await self._add_history(
-            db, plugin_id, review.id, None, ReviewStage.SUBMITTED,
-            "插件提交审核", submitter_id, "user"
-        )
-        
-        # 更新插件状态
-        plugin = await db.get(Plugin, plugin_id)
-        if plugin:
-            plugin.status = PluginStatus.PENDING
-        
-        await db.commit()
+        async with commit_or_rollback(db):
+            # 创建审核记录
+            review = PluginReview(
+                plugin_id=plugin_id,
+                repo_url=repo_url,
+                repo_branch=repo_branch,
+                stage=ReviewStage.SUBMITTED
+            )
+
+            db.add(review)
+            await db.flush()
+
+            # 记录历史
+            await self._add_history(
+                db, plugin_id, review.id, None, ReviewStage.SUBMITTED,
+                "插件提交审核", submitter_id, "user"
+            )
+
+            # 更新插件状态
+            plugin = await db.get(Plugin, plugin_id)
+            if plugin:
+                plugin.status = PluginStatus.PENDING
+
         await db.refresh(review)
         return review
     
@@ -270,40 +271,40 @@ class PluginReviewService:
         if review.stage not in [ReviewStage.AI_APPROVED, ReviewStage.MANUAL_REVIEWING]:
             raise ValueError("当前状态不允许人工审核")
         
-        review.manual_reviewer_id = reviewer_id
-        review.manual_review_notes = notes
-        review.manual_reviewed_at = utc_now()
-        
-        if decision == "approve":
-            review.stage = ReviewStage.APPROVED
-            review.completed_at = utc_now()
-            
-            # 更新插件状态
-            plugin = await db.get(Plugin, review.plugin_id)
-            if plugin:
-                plugin.status = PluginStatus.APPROVED
-                plugin.published_at = utc_now()
-                
-        elif decision == "reject":
-            review.stage = ReviewStage.REJECTED
-            review.completed_at = utc_now()
-            
-            # 更新插件状态
-            plugin = await db.get(Plugin, review.plugin_id)
-            if plugin:
-                plugin.status = PluginStatus.REJECTED
-                
-        elif decision == "needs_revision":
-            review.stage = ReviewStage.NEEDS_REVISION
-            review.revision_requested_at = utc_now()
-        
-        await self._add_history(
-            db, review.plugin_id, review.id,
-            ReviewStage.MANUAL_REVIEWING, review.stage,
-            f"人工审核: {decision} - {notes}", reviewer_id, "user"
-        )
-        
-        await db.commit()
+        async with commit_or_rollback(db):
+            review.manual_reviewer_id = reviewer_id
+            review.manual_review_notes = notes
+            review.manual_reviewed_at = utc_now()
+
+            if decision == "approve":
+                review.stage = ReviewStage.APPROVED
+                review.completed_at = utc_now()
+
+                # 更新插件状态
+                plugin = await db.get(Plugin, review.plugin_id)
+                if plugin:
+                    plugin.status = PluginStatus.APPROVED
+                    plugin.published_at = utc_now()
+
+            elif decision == "reject":
+                review.stage = ReviewStage.REJECTED
+                review.completed_at = utc_now()
+
+                # 更新插件状态
+                plugin = await db.get(Plugin, review.plugin_id)
+                if plugin:
+                    plugin.status = PluginStatus.REJECTED
+
+            elif decision == "needs_revision":
+                review.stage = ReviewStage.NEEDS_REVISION
+                review.revision_requested_at = utc_now()
+
+            await self._add_history(
+                db, review.plugin_id, review.id,
+                ReviewStage.MANUAL_REVIEWING, review.stage,
+                f"人工审核: {decision} - {notes}", reviewer_id, "user"
+            )
+
         await db.refresh(review)
         return review
 
@@ -319,79 +320,79 @@ class PluginReviewService:
         if decision not in {"approve", "reject"}:
             raise ValueError("不支持的审核决定")
 
-        result = await db.execute(
-            select(PluginReview)
-            .where(PluginReview.plugin_id == plugin.id)
-            .order_by(desc(PluginReview.submitted_at), desc(PluginReview.id))
-        )
-        review = result.scalars().first()
-
-        if not review:
-            review = PluginReview(
-                plugin_id=plugin.id,
-                repo_url=plugin.repo_url,
-                repo_branch=plugin.repo_branch or "main",
-                stage=ReviewStage.SUBMITTED,
+        async with commit_or_rollback(db):
+            result = await db.execute(
+                select(PluginReview)
+                .where(PluginReview.plugin_id == plugin.id)
+                .order_by(desc(PluginReview.submitted_at), desc(PluginReview.id))
             )
-            db.add(review)
-            await db.flush()
+            review = result.scalars().first()
+
+            if not review:
+                review = PluginReview(
+                    plugin_id=plugin.id,
+                    repo_url=plugin.repo_url,
+                    repo_branch=plugin.repo_branch or "main",
+                    stage=ReviewStage.SUBMITTED,
+                )
+                db.add(review)
+                await db.flush()
+                await self._add_history(
+                    db,
+                    plugin.id,
+                    review.id,
+                    None,
+                    ReviewStage.SUBMITTED,
+                    "插件进入管理员审核",
+                    reviewer_id,
+                    "user",
+                )
+
+            old_stage = review.stage
+            now = utc_now()
+            new_stage = ReviewStage.APPROVED if decision == "approve" else ReviewStage.REJECTED
+            action_label = "通过" if decision == "approve" else "拒绝"
+
+            review.stage = new_stage
+            review.manual_reviewer_id = reviewer_id
+            review.manual_review_notes = notes or None
+            review.review_feedback = notes or review.review_feedback
+            review.manual_reviewed_at = now
+            review.completed_at = now
+
+            if decision == "approve":
+                plugin.status = PluginStatus.APPROVED
+                plugin.published_at = now
+                NotificationService.add(
+                    db,
+                    user_id=plugin.author_id,
+                    type="plugin_approved",
+                    title="插件审核通过",
+                    content=f"你的插件「{plugin.name}」已通过审核并上架。",
+                    target_url=f"/plugin/{plugin.id}",
+                )
+            else:
+                plugin.status = PluginStatus.REJECTED
+                NotificationService.add(
+                    db,
+                    user_id=plugin.author_id,
+                    type="plugin_rejected",
+                    title="插件审核未通过",
+                    content=notes or f"你的插件「{plugin.name}」未通过审核，请查看审核意见。",
+                    target_url="/my/plugins",
+                )
+
             await self._add_history(
                 db,
                 plugin.id,
                 review.id,
-                None,
-                ReviewStage.SUBMITTED,
-                "插件进入管理员审核",
+                old_stage,
+                new_stage,
+                f"管理员审核{action_label}" + (f": {notes}" if notes else ""),
                 reviewer_id,
                 "user",
             )
 
-        old_stage = review.stage
-        now = utc_now()
-        new_stage = ReviewStage.APPROVED if decision == "approve" else ReviewStage.REJECTED
-        action_label = "通过" if decision == "approve" else "拒绝"
-
-        review.stage = new_stage
-        review.manual_reviewer_id = reviewer_id
-        review.manual_review_notes = notes or None
-        review.review_feedback = notes or review.review_feedback
-        review.manual_reviewed_at = now
-        review.completed_at = now
-
-        if decision == "approve":
-            plugin.status = PluginStatus.APPROVED
-            plugin.published_at = now
-            NotificationService.add(
-                db,
-                user_id=plugin.author_id,
-                type="plugin_approved",
-                title="插件审核通过",
-                content=f"你的插件「{plugin.name}」已通过审核并上架。",
-                target_url=f"/plugin/{plugin.id}",
-            )
-        else:
-            plugin.status = PluginStatus.REJECTED
-            NotificationService.add(
-                db,
-                user_id=plugin.author_id,
-                type="plugin_rejected",
-                title="插件审核未通过",
-                content=notes or f"你的插件「{plugin.name}」未通过审核，请查看审核意见。",
-                target_url="/my/plugins",
-            )
-
-        await self._add_history(
-            db,
-            plugin.id,
-            review.id,
-            old_stage,
-            new_stage,
-            f"管理员审核{action_label}" + (f": {notes}" if notes else ""),
-            reviewer_id,
-            "user",
-        )
-
-        await db.commit()
         await db.refresh(plugin)
         return plugin
     

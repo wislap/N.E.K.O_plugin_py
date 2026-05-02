@@ -10,6 +10,7 @@ from app.schemas.plugin import PluginCreate, PluginUpdate, PluginSearchParams
 from app.schemas.common import PaginatedResponse
 from app.utils.plugin_validator import validate_plugin_repo
 from app.services.notification_service import NotificationService
+from app.services.transactions import commit_or_rollback
 
 
 class PluginService:
@@ -165,42 +166,42 @@ class PluginService:
                 raise ValueError(f"分区 '{plugin_data.zone_slug}' 不存在")
             zone_id = zone.id
 
-        plugin = Plugin(
-            name=plugin_data.name,
-            slug=plugin_data.slug,
-            description=plugin_data.description,
-            short_description=plugin_data.short_description,
-            author_id=author_id,
-            author_name=author_name,
-            download_url=plugin_data.download_url,
-            icon_url=plugin_data.icon_url,
-            repo_url=plugin_data.repo_url,
-            readme=plugin_data.readme,
-            zone_id=zone_id,
-            tags=plugin_data.tags,
-            status=PluginStatus.PENDING  # 新插件默认待审核
-        )
-        
-        db.add(plugin)
-        await db.flush()  # 获取plugin.id
-        
-        # 添加分类关联
-        if plugin_data.category_ids:
-            categories_result = await db.execute(
-                select(Category).where(Category.id.in_(plugin_data.category_ids))
+        async with commit_or_rollback(db):
+            plugin = Plugin(
+                name=plugin_data.name,
+                slug=plugin_data.slug,
+                description=plugin_data.description,
+                short_description=plugin_data.short_description,
+                author_id=author_id,
+                author_name=author_name,
+                download_url=plugin_data.download_url,
+                icon_url=plugin_data.icon_url,
+                repo_url=plugin_data.repo_url,
+                readme=plugin_data.readme,
+                zone_id=zone_id,
+                tags=plugin_data.tags,
+                status=PluginStatus.PENDING  # 新插件默认待审核
             )
-            categories = categories_result.scalars().all()
-            plugin.categories = list(categories)
 
-        await NotificationService.notify_admins(
-            db,
-            type="plugin_submitted",
-            title="有新的插件待审核",
-            content=f"{author_name} 提交了插件「{plugin.name}」。",
-            target_url="/admin/plugins",
-        )
-        
-        await db.commit()
+            db.add(plugin)
+            await db.flush()  # 获取plugin.id
+
+            # 添加分类关联
+            if plugin_data.category_ids:
+                categories_result = await db.execute(
+                    select(Category).where(Category.id.in_(plugin_data.category_ids))
+                )
+                categories = categories_result.scalars().all()
+                plugin.categories = list(categories)
+
+            await NotificationService.notify_admins(
+                db,
+                type="plugin_submitted",
+                title="有新的插件待审核",
+                content=f"{author_name} 提交了插件「{plugin.name}」。",
+                target_url="/admin/plugins",
+            )
+
         await db.refresh(plugin)
         return plugin
     
@@ -272,10 +273,11 @@ class PluginService:
             await db.commit()
     
     @staticmethod
-    async def update_rating(db: AsyncSession, plugin_id: int) -> None:
+    async def update_rating(db: AsyncSession, plugin_id: int, commit: bool = True) -> None:
         """更新插件评分"""
         from app.models.review import Review
-        
+
+        await db.flush()
         result = await db.execute(
             select(func.avg(Review.rating), func.count(Review.id))
             .where(Review.plugin_id == plugin_id)
@@ -286,7 +288,8 @@ class PluginService:
         if plugin:
             plugin.rating_average = round(avg_rating, 2) if avg_rating else 0.0
             plugin.rating_count = count
-            await db.commit()
+            if commit:
+                await db.commit()
     
     @staticmethod
     async def get_featured_plugins(db: AsyncSession, limit: int = 10) -> List[Plugin]:
