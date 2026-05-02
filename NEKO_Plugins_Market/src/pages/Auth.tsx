@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { authApi } from '@/services/api';
 import { softReveal } from '@/lib/animations';
+import { isDebugAuthEnabled } from '@/lib/debug';
 
 type AuthMode = 'login' | 'register';
 
@@ -58,6 +59,21 @@ export function Auth() {
       navigate(nextPath, { replace: true });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '操作失败，请稍后重试');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const debugLogin = async () => {
+    setErrorMessage('');
+    setIsSubmitting(true);
+
+    try {
+      const response = await authApi.debugLogin();
+      storeSession(response);
+      navigate(nextPath, { replace: true });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '调试登录失败');
     } finally {
       setIsSubmitting(false);
     }
@@ -303,6 +319,23 @@ export function Auth() {
               {isRegister ? '去登录' : '去注册'}
             </Link>
           </div>
+
+          {isDebugAuthEnabled && (
+            <div className="mt-5 border-t border-slate-800/70 pt-5">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={debugLogin}
+                disabled={isSubmitting}
+                className="w-full border-amber-500/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15 hover:text-amber-100"
+              >
+                调试模式：一键登录
+              </Button>
+              <p className="mt-2 text-center text-xs text-slate-500">
+                仅用于本地开发，关闭 VITE_DEBUG_AUTH 后隐藏。
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </main>

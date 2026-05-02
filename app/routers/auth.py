@@ -4,9 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.config import settings
+from app.core.security import get_current_user, get_or_create_debug_user, create_access_token, create_refresh_token
 from app.services.auth_service import AuthService
-from app.schemas.user import UserCreate, UserLogin, User, Token
+from app.schemas.user import UserCreate, UserLogin, User, Token, PasswordChange
 from app.schemas.common import MessageResponse
 
 router = APIRouter()
@@ -65,6 +66,30 @@ async def login(
         )
 
 
+@router.post("/auth/debug-login", response_model=dict)
+async def debug_login(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    调试登录。仅在 ENVIRONMENT=development 且 DEBUG_AUTH_ENABLED=true 时可用。
+    """
+    if not settings.debug_auth_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="调试登录未启用"
+        )
+
+    user = await get_or_create_debug_user(db)
+    access_token = create_access_token(data={"sub": str(user.id)})
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    return {
+        "user": serialize_user(user),
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer"
+    }
+
+
 @router.post("/auth/refresh", response_model=Token)
 async def refresh_token(refresh_token: str):
     """
@@ -89,6 +114,30 @@ async def get_current_user_info(
     获取当前登录用户信息
     """
     return current_user
+
+
+@router.post("/auth/change-password", response_model=User)
+async def change_password(
+    password_data: PasswordChange,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    修改当前用户密码。首次 root 登录必须调用此接口完成改密。
+    """
+    try:
+        user = await AuthService.change_password(
+            db,
+            current_user,
+            password_data.current_password,
+            password_data.new_password
+        )
+        return user
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
 
 @router.post("/auth/logout", response_model=MessageResponse)

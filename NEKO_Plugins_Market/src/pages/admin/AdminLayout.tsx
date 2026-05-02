@@ -48,6 +48,10 @@ export default function AdminLayout() {
         // 检查是否是管理员
         if (!userData.is_admin) {
           navigate("/");
+          return;
+        }
+        if (userData.must_change_password && location.pathname !== "/admin/change-password") {
+          navigate("/admin/change-password", { replace: true });
         }
       } catch (error) {
         navigate("/admin/login");
@@ -55,7 +59,7 @@ export default function AdminLayout() {
     };
 
     fetchUser();
-  }, [navigate]);
+  }, [location.pathname, navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -73,7 +77,7 @@ export default function AdminLayout() {
       </div>
 
       <nav className="flex-1 space-y-1 p-4">
-        {menuItems.map((item) => {
+        {(user?.must_change_password ? [] : menuItems).map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
 
@@ -91,9 +95,14 @@ export default function AdminLayout() {
               <Icon className="h-4 w-4" />
               {item.label}
               {isActive && <ChevronRight className="ml-auto h-4 w-4" />}
-            </Link>
-          );
-        })}
+          </Link>
+        );
+      })}
+        {user?.must_change_password && (
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-600">
+            请先修改初始密码
+          </div>
+        )}
       </nav>
 
       <div className="border-t p-4">
@@ -144,7 +153,9 @@ export default function AdminLayout() {
         <main className="flex-1 min-h-screen">
           <header className="h-16 border-b bg-card/50 backdrop-blur flex items-center justify-between px-6 lg:px-8">
             <h1 className="text-lg font-semibold lg:ml-0 ml-12">
-              {menuItems.find((item) => item.path === location.pathname)?.label || "管理后台"}
+              {location.pathname === "/admin/change-password"
+                ? "修改初始密码"
+                : menuItems.find((item) => item.path === location.pathname)?.label || "管理后台"}
             </h1>
             <div className="flex items-center gap-4">
               <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">

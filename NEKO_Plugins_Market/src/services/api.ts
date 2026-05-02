@@ -10,6 +10,7 @@ export interface User {
   avatar_url?: string | null;
   is_admin: boolean;
   is_active: boolean;
+  must_change_password: boolean;
   created_at: string;
   updated_at?: string;
 }
@@ -73,6 +74,7 @@ export interface SystemSetting {
   key: string;
   value: string | number | boolean | null;
   description?: string | null;
+  group?: string | null;
   is_encrypted?: boolean;
   updated_at?: string;
 }
@@ -95,6 +97,11 @@ interface RegisterRequest {
   email: string;
   password: string;
   display_name?: string;
+}
+
+interface PasswordChangeRequest {
+  current_password: string;
+  new_password: string;
 }
 
 interface LoginResponse {
@@ -303,12 +310,20 @@ export const authApi = {
     return post<LoginResponse>("/auth/register", data);
   },
 
+  debugLogin() {
+    return post<LoginResponse>("/auth/debug-login");
+  },
+
   login(credentials: LoginRequest) {
     return post<LoginResponse>("/auth/login", credentials);
   },
 
   getCurrentUser() {
     return request<User>("/auth/me");
+  },
+
+  changePassword(data: PasswordChangeRequest) {
+    return post<User>("/auth/change-password", data);
   },
 
   logout() {
@@ -465,6 +480,13 @@ export const adminApi = {
 
   initSettings() {
     return post<{ message: string }>("/admin/settings/init");
+  },
+
+  updateSetting(key: string, value: string | number | boolean | null) {
+    return put<{ message: string; key: string; value?: string | number | boolean | null }>(
+      `/admin/settings/${encodeURIComponent(key)}`,
+      { value }
+    );
   },
 
   getLogStats() {

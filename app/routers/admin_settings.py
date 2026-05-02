@@ -5,7 +5,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, Any
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -40,6 +40,11 @@ class SMTPSettingsResponse(BaseModel):
 class TestEmailRequest(BaseModel):
     """测试邮件请求"""
     to_email: EmailStr = Field(..., description="测试收件人邮箱")
+
+
+class SystemSettingUpdateRequest(BaseModel):
+    """通用系统设置更新请求"""
+    value: Any = Field(..., description="设置值")
 
 
 # ========== SMTP 设置管理 ==========
@@ -230,8 +235,63 @@ async def get_all_settings(
             ]
         }
     else:
-        all_settings = await system_setting_service.get_all_settings(db)
-        return {"settings": all_settings}
+        settings_list = await system_setting_service.get_all_setting_records(db)
+        return {
+            "settings": [
+                {
+                    "key": s.key,
+                    "value": s.value if not s.is_encrypted else "********",
+                    "description": s.description,
+                    "group": s.group,
+                    "is_encrypted": s.is_encrypted,
+                    "updated_at": s.updated_at
+                }
+                for s in settings_list
+            ]
+        }
+
+
+@router.put("/settings/{key}")
+async def update_setting(
+    key: str,
+    data: SystemSettingUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    更新单个系统设置（需要 system:settings 权限）
+    """
+    if not current_user.has_permission("system:settings"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要 system:settings 权限"
+        )
+
+    setting = await system_setting_service.get_setting(db, key)
+    if not setting and key not in system_setting_service.DEFAULT_SETTINGS:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="设置项不存在"
+        )
+
+    default_config = system_setting_service.DEFAULT_SETTINGS.get(key, {})
+    is_encrypted = setting.is_encrypted if setting else default_config.get("is_encrypted", False)
+    value = "" if data.value is None else str(data.value)
+
+    if is_encrypted and value == "********":
+        return {"message": "敏感设置未修改", "key": key}
+
+    updated = await system_setting_service.set_setting(
+        db,
+        key,
+        value,
+        updated_by=current_user.id
+    )
+    return {
+        "message": "设置已更新",
+        "key": updated.key,
+        "value": updated.value if not updated.is_encrypted else "********"
+    }
 
 
 @router.post("/settings/init")

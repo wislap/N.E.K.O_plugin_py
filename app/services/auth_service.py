@@ -118,3 +118,21 @@ class AuthService:
             raise ValueError("无效的令牌")
         
         return create_access_token(data={"sub": user_id})
+
+    @staticmethod
+    async def change_password(
+        db: AsyncSession,
+        user: User,
+        current_password: str,
+        new_password: str
+    ) -> User:
+        """修改当前用户密码"""
+        if not verify_password(current_password, user.hashed_password):
+            raise ValueError("当前密码错误")
+
+        user.hashed_password = get_password_hash(new_password)
+        user.must_change_password = False
+        user.updated_at = utc_now()
+        await db.commit()
+        await db.refresh(user)
+        return user

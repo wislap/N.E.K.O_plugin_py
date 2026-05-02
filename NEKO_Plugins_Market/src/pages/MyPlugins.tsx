@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { pluginsApi, type Plugin } from '@/services/api';
 import { listContainer, listItem, softReveal } from '@/lib/animations';
+import { isDebugAuthEnabled } from '@/lib/debug';
 
 const statusMeta: Record<string, { label: string; className: string; icon: typeof Clock }> = {
   pending: {
@@ -61,7 +62,7 @@ export function MyPlugins() {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (!token) {
+    if (!token && !isDebugAuthEnabled) {
       const next = `${location.pathname}${location.search}`;
       navigate(`/login?next=${encodeURIComponent(next)}`, { replace: true });
       return;

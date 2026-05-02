@@ -18,7 +18,7 @@ from app.models.permission import PermissionGroup
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # HTTP Bearer 认证
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -122,7 +122,7 @@ async def decode_token_with_key_rotation(token: str, db: AsyncSession) -> Option
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: AsyncSession = Depends(get_db)
 ) -> User:
     """获取当前登录用户（支持密钥轮换）"""
@@ -132,12 +132,19 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
+    if credentials is None:
+        if settings.debug_auth_enabled:
+            return await get_or_create_debug_user(db)
+        raise credentials_exception
+    
     token = credentials.credentials
     
     # 使用支持密钥轮换的解码方法
     payload = await decode_token_with_key_rotation(token, db)
     
     if payload is None:
+        if settings.debug_auth_enabled:
+            return await get_or_create_debug_user(db)
         raise credentials_exception
     
     # 检查令牌类型
@@ -169,6 +176,45 @@ async def get_current_user(
             detail="用户已被禁用"
         )
     
+    return user
+
+
+async def get_or_create_debug_user(db: AsyncSession) -> User:
+    """获取或创建调试用户。仅在 settings.debug_auth_enabled 为 True 时调用。"""
+    result = await db.execute(
+        select(User)
+        .options(
+            selectinload(User.permission_groups).selectinload(PermissionGroup.permissions),
+            selectinload(User.permission_groups).selectinload(PermissionGroup.inherited_groups),
+            selectinload(User.permission_groups).selectinload(PermissionGroup.parent),
+        )
+        .where(User.username == settings.DEBUG_AUTH_USERNAME)
+    )
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        user = User(
+            username=settings.DEBUG_AUTH_USERNAME,
+            email=settings.DEBUG_AUTH_EMAIL,
+            hashed_password=pwd_context.hash("debug-password"),
+            display_name="调试用户",
+            is_active=True,
+            is_admin=settings.DEBUG_AUTH_IS_ADMIN,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+    elif (
+        user.email != settings.DEBUG_AUTH_EMAIL
+        or user.is_admin != settings.DEBUG_AUTH_IS_ADMIN
+        or not user.is_active
+    ):
+        user.email = settings.DEBUG_AUTH_EMAIL
+        user.is_admin = settings.DEBUG_AUTH_IS_ADMIN
+        user.is_active = True
+        await db.commit()
+        await db.refresh(user)
+
     return user
 
 

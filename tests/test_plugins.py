@@ -2,6 +2,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from tests.conftest import create_test_user
 
 
@@ -93,3 +94,27 @@ async def test_plugin_create_approve_list_and_download(
     download_response = await client.post(f"/api/v1/plugins/{plugin['id']}/download")
     assert download_response.status_code == 200
     assert download_response.json()["success"] is True
+
+
+async def test_debug_auth_allows_plugin_upload_without_token(client: AsyncClient, monkeypatch):
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    monkeypatch.setattr(settings, "DEBUG_AUTH_ENABLED", True)
+    monkeypatch.setattr(settings, "DEBUG_AUTH_USERNAME", "debug_member")
+    monkeypatch.setattr(settings, "DEBUG_AUTH_EMAIL", "debug-member@example.com")
+    monkeypatch.setattr(settings, "DEBUG_AUTH_IS_ADMIN", False)
+
+    create_response = await client.post(
+        "/api/v1/plugins",
+        json={
+            "name": "Debug Plugin",
+            "slug": "debug-plugin",
+            "description": "Created by debug auth",
+        },
+    )
+
+    assert create_response.status_code == 201
+    assert create_response.json()["author_name"] == "debug_member"
+
+    my_plugins_response = await client.get("/api/v1/plugins/mine")
+    assert my_plugins_response.status_code == 200
+    assert my_plugins_response.json()[0]["slug"] == "debug-plugin"

@@ -23,6 +23,7 @@ class User(Base):
     # 权限 - 保留 is_admin 作为快速判断，详细权限通过 permission_groups 管理
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)  # 超管拥有所有权限
+    must_change_password = Column(Boolean, default=False, nullable=False)
     
     # 时间戳
     created_at = Column(DateTime, default=utc_now)

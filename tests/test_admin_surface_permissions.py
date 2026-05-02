@@ -157,6 +157,22 @@ async def test_settings_and_logs_require_permissions(
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert admin_settings.status_code == 200
+    assert isinstance(admin_settings.json()["settings"], list)
+
+    member_update = await client.put(
+        "/api/v1/admin/settings/smtp_host",
+        headers={"Authorization": f"Bearer {member_token}"},
+        json={"value": "smtp.example.com"},
+    )
+    assert member_update.status_code == 403
+
+    admin_update = await client.put(
+        "/api/v1/admin/settings/smtp_host",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"value": "smtp.example.com"},
+    )
+    assert admin_update.status_code == 200
+    assert admin_update.json()["key"] == "smtp_host"
 
     member_logs = await client.get(
         "/api/v1/logs/stats",

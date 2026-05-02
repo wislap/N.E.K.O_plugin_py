@@ -6,6 +6,7 @@ import secrets
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    ENVIRONMENT: str = "production"
     PROJECT_NAME: str = "N.E.K.O Plugin Market"
     VERSION: str = "1.0.0"
     
@@ -19,6 +20,17 @@ class Settings(BaseSettings):
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # Debug auth. Development only; keep disabled in production.
+    DEBUG_AUTH_ENABLED: bool = False
+    DEBUG_AUTH_USERNAME: str = "debug_user"
+    DEBUG_AUTH_EMAIL: str = "debug@example.com"
+    DEBUG_AUTH_IS_ADMIN: bool = False
+
+    # Initial administrator bootstrap. Used only when no admin user exists.
+    INITIAL_ADMIN_USERNAME: str = "root"
+    INITIAL_ADMIN_EMAIL: str = "root@example.com"
+    INITIAL_ADMIN_PASSWORD: str = "password"
     
     # 分页配置
     DEFAULT_PAGE_SIZE: int = 20
@@ -67,13 +79,17 @@ class Settings(BaseSettings):
         if not self.SECRET_KEY:
             import os
             # 检查是否在开发环境
-            if os.getenv("ENVIRONMENT") == "development":
+            if self.ENVIRONMENT == "development":
                 self.SECRET_KEY = secrets.token_urlsafe(32)
             else:
                 raise ValueError(
                     "生产环境必须设置 SECRET_KEY 环境变量！"
                     "请运行: export SECRET_KEY=$(openssl rand -hex 32)"
                 )
+
+    @property
+    def debug_auth_enabled(self) -> bool:
+        return self.ENVIRONMENT == "development" and self.DEBUG_AUTH_ENABLED
 
 
 settings = Settings()

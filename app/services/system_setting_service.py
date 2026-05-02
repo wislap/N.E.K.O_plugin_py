@@ -121,6 +121,13 @@ class SystemSettingService:
                 settings_dict[setting.key] = setting.value
         
         return settings_dict
+
+    async def get_all_setting_records(self, db: AsyncSession) -> List[SystemSetting]:
+        """获取所有设置记录"""
+        result = await db.execute(
+            select(SystemSetting).order_by(SystemSetting.group, SystemSetting.key)
+        )
+        return list(result.scalars().all())
     
     # ========== SMTP 设置快捷方法 ==========
     

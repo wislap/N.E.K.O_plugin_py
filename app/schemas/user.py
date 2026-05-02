@@ -25,6 +25,11 @@ class UserLogin(BaseModel):
     password: str
 
 
+class PasswordChange(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=100)
+    new_password: str = Field(..., min_length=6, max_length=100)
+
+
 class User(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
@@ -34,6 +39,7 @@ class User(UserBase):
     website: Optional[str]
     is_active: bool
     is_admin: bool
+    must_change_password: bool
     created_at: datetime
     updated_at: datetime
     last_login: Optional[datetime]

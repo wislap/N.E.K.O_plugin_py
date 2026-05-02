@@ -18,6 +18,7 @@ import AdminPermissions from '@/pages/admin/Permissions';
 import AdminSMTP from '@/pages/admin/SMTP';
 import AdminSettings from '@/pages/admin/Settings';
 import AdminLogs from '@/pages/admin/Logs';
+import AdminChangePassword from '@/pages/admin/ChangePassword';
 
 function MainLayout() {
   const location = useLocation();
@@ -35,6 +36,7 @@ function MainLayout() {
           <Route path="smtp" element={<AdminSMTP />} />
           <Route path="settings" element={<AdminSettings />} />
           <Route path="logs" element={<AdminLogs />} />
+          <Route path="change-password" element={<AdminChangePassword />} />
         </Route>
       </Routes>
     );

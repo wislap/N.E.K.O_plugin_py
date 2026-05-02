@@ -24,6 +24,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { zones } from '@/data';
 import { pluginsApi } from '@/services/api';
+import { isDebugAuthEnabled } from '@/lib/debug';
 
 const standardTags = [
   '游戏', '查询', '攻略', '辅助', '陪玩', '互动', '情感', '增强',
@@ -55,7 +56,7 @@ export function Upload() {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (!token) {
+    if (!token && !isDebugAuthEnabled) {
       const next = `${location.pathname}${location.search}`;
       navigate(`/login?next=${encodeURIComponent(next)}`, { replace: true });
       return;
