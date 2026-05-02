@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     
     # 数据库配置
     DATABASE_URL: str = "sqlite+aiosqlite:///./plugin_market.db"
+    DEV_AUTO_CREATE_TABLES: bool = True
     
     # CORS 配置
     ALLOWED_HOSTS: List[str] = ["*"]

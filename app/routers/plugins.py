@@ -36,8 +36,16 @@ async def list_plugins(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    获取插件列表，支持搜索和筛选
+    获取公开插件列表，支持搜索和筛选。
+
+    公开列表只允许查看已发布插件；待审核/已拒绝插件走管理员接口。
     """
+    if plugin_status and plugin_status != PluginStatus.APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只能通过管理员接口查看非公开插件"
+        )
+
     params = PluginSearchParams(
         q=q,
         category=category,
@@ -50,6 +58,42 @@ async def list_plugins(
     
     result = await PluginService.get_plugins(db, params, page, page_size)
     return result
+
+
+@router.get("/admin/plugins", response_model=PaginatedResponse[PluginList])
+async def list_admin_plugins(
+    q: Optional[str] = Query(None, description="搜索关键词"),
+    category: Optional[str] = Query(None, description="分类slug"),
+    author: Optional[str] = Query(None, description="作者名"),
+    plugin_status: Optional[PluginStatus] = Query(None, alias="status", description="插件状态"),
+    sort_by: Optional[str] = Query("created_at", description="排序字段"),
+    sort_order: Optional[str] = Query("desc", description="排序方向: asc/desc"),
+    featured_only: bool = Query(False, description="仅显示推荐插件"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    获取管理员插件列表，可查看所有审核状态。
+    """
+    params = PluginSearchParams(
+        q=q,
+        category=category,
+        author=author,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        status=plugin_status,
+        featured_only=featured_only
+    )
+
+    return await PluginService.get_plugins(
+        db,
+        params,
+        page,
+        page_size,
+        include_unpublished=True
+    )
 
 
 @router.get("/plugins/featured", response_model=List[PluginList])

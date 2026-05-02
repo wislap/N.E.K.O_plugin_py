@@ -11,9 +11,10 @@ from app.services.permission_service import PermissionService
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 启动时创建数据库表
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # 开发环境可自动补表；生产环境应通过 Alembic 管理数据库结构。
+    if settings.ENVIRONMENT == "development" and settings.DEV_AUTO_CREATE_TABLES:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
     async with AsyncSessionLocal() as db:
         await BootstrapService.ensure_schema_compatibility(db)

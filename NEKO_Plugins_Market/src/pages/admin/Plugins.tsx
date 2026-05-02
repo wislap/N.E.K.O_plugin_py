@@ -40,13 +40,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { adminApi, type Plugin } from "@/services/api";
+import { adminApi, type Plugin } from "@/services/adminApi";
 
 interface ReviewData {
-  rating: string;
-  functionality: string;
-  security: string;
-  documentation: string;
   comment: string;
 }
 
@@ -59,10 +55,6 @@ export default function AdminPlugins() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [reviewData, setReviewData] = useState<ReviewData>({
-    rating: "B",
-    functionality: "B",
-    security: "B",
-    documentation: "B",
     comment: ""
   });
 
@@ -268,18 +260,14 @@ export default function AdminPlugins() {
                           </Button>
                           {plugin.status === "pending" && (
                             <Button
-                              size="sm"
-                              onClick={() => {
-                                setSelectedPlugin(plugin);
-                                setReviewData({
-                                  rating: "B",
-                                  functionality: "B",
-                                  security: "B",
-                                  documentation: "B",
-                                  comment: ""
-                                });
-                                setIsReviewOpen(true);
-                              }}
+	                              size="sm"
+	                              onClick={() => {
+	                                setSelectedPlugin(plugin);
+	                                setReviewData({
+	                                  comment: ""
+	                                });
+	                                setIsReviewOpen(true);
+	                              }}
                             >
                               <CheckCircle className="h-4 w-4 mr-1" />
                               审核
@@ -358,98 +346,14 @@ export default function AdminPlugins() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>审核插件</DialogTitle>
-            <DialogDescription>
-              {selectedPlugin?.name}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>综合评级</Label>
-                <Select
-                  value={reviewData.rating}
-                  onValueChange={(value) =>
-                    setReviewData({ ...reviewData, rating: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="S">S - 优秀</SelectItem>
-                    <SelectItem value="A">A - 良好</SelectItem>
-                    <SelectItem value="B">B - 合格</SelectItem>
-                    <SelectItem value="C">C - 需改进</SelectItem>
-                    <SelectItem value="D">D - 不合格</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>功能完整性</Label>
-                <Select
-                  value={reviewData.functionality}
-                  onValueChange={(value) =>
-                    setReviewData({ ...reviewData, functionality: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="S">S</SelectItem>
-                    <SelectItem value="A">A</SelectItem>
-                    <SelectItem value="B">B</SelectItem>
-                    <SelectItem value="C">C</SelectItem>
-                    <SelectItem value="D">D</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>安全性</Label>
-                <Select
-                  value={reviewData.security}
-                  onValueChange={(value) =>
-                    setReviewData({ ...reviewData, security: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="S">S</SelectItem>
-                    <SelectItem value="A">A</SelectItem>
-                    <SelectItem value="B">B</SelectItem>
-                    <SelectItem value="C">C</SelectItem>
-                    <SelectItem value="D">D</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>文档质量</Label>
-                <Select
-                  value={reviewData.documentation}
-                  onValueChange={(value) =>
-                    setReviewData({ ...reviewData, documentation: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="S">S</SelectItem>
-                    <SelectItem value="A">A</SelectItem>
-                    <SelectItem value="B">B</SelectItem>
-                    <SelectItem value="C">C</SelectItem>
-                    <SelectItem value="D">D</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>审核意见</Label>
-              <Textarea
+	            <DialogDescription>
+	              {selectedPlugin?.name}
+	            </DialogDescription>
+	          </DialogHeader>
+	          <div className="space-y-4">
+	            <div className="space-y-2">
+	              <Label>审核意见</Label>
+	              <Textarea
                 placeholder="请输入审核意见..."
                 value={reviewData.comment}
                 onChange={(e) =>

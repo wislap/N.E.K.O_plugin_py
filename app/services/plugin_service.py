@@ -2,7 +2,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, desc, asc
 from sqlalchemy.orm import selectinload
 from typing import Optional, List
-from datetime import datetime
 
 from app.models.plugin import Plugin, PluginStatus
 from app.models.category import Category
@@ -45,7 +44,8 @@ class PluginService:
         db: AsyncSession,
         params: PluginSearchParams,
         page: int = 1,
-        page_size: int = 20
+        page_size: int = 20,
+        include_unpublished: bool = False
     ) -> PaginatedResponse:
         """获取插件列表（支持搜索和筛选）"""
         query = select(Plugin).options(
@@ -57,10 +57,10 @@ class PluginService:
         # 构建过滤条件
         filters = []
         
-        # 状态过滤 - 默认只显示已通过的
+        # 状态过滤 - 公开列表默认只显示已通过的，管理员列表可查看全部状态。
         if params.status:
             filters.append(Plugin.status == params.status)
-        else:
+        elif not include_unpublished:
             filters.append(Plugin.status == PluginStatus.APPROVED)
         
         # 关键词搜索

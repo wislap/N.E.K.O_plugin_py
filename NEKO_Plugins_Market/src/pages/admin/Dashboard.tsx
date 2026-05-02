@@ -10,7 +10,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { adminApi } from "@/services/api";
+import { adminApi } from "@/services/adminApi";
 
 interface DashboardStats {
   totalUsers: number;

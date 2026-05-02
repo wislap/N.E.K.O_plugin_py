@@ -6,7 +6,6 @@ import json
 from typing import Optional, Dict, Any, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from datetime import datetime
 
 from app.models.system_setting import SystemSetting, SMTPSettingKeys
 from app.core.config import settings

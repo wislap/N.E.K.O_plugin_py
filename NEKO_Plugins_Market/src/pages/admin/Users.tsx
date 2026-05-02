@@ -53,7 +53,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { adminApi, type User as UserType } from "@/services/api";
+import { adminApi, type User as UserType } from "@/services/adminApi";
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<UserType[]>([]);

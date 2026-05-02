@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { adminApi, type LogStats } from "@/services/api";
+import { adminApi, type LogStats } from "@/services/adminApi";
 
 const logTypes = [
   { value: "all", label: "全部日志" },

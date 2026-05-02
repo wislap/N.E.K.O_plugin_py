@@ -5,9 +5,12 @@ import { zones as fallbackZones } from '@/data';
 import { zonesApi } from '@/services/api';
 import type { Zone } from '@/types';
 import { listContainer } from '@/lib/animations';
+import { isDebugDataEnabled } from '@/lib/debug';
 
 export function ZonesSection() {
-  const [zones, setZones] = useState<Zone[]>(fallbackZones);
+  const [zones, setZones] = useState<Zone[]>(
+    isDebugDataEnabled ? fallbackZones : []
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -19,7 +22,7 @@ export function ZonesSection() {
         }
       })
       .catch(() => {
-        if (isMounted) {
+        if (isMounted && isDebugDataEnabled) {
           setZones(fallbackZones);
         }
       });

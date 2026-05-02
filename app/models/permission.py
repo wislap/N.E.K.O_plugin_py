@@ -4,7 +4,6 @@
 """
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Table, Text
 from sqlalchemy.orm import relationship
-from datetime import datetime
 
 from app.core.database import Base
 from app.core.time import utc_now

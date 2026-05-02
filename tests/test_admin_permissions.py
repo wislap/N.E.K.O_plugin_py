@@ -63,6 +63,62 @@ async def test_user_list_requires_admin(
     assert search_response.json()["items"][0]["username"] == "member"
 
 
+async def test_user_admin_safety_guards(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    admin = await create_test_user(
+        db_session,
+        username="safe_admin",
+        email="safe-admin@example.com",
+        is_admin=True,
+    )
+    member = await create_test_user(
+        db_session,
+        username="safe_member",
+        email="safe-member@example.com",
+        is_admin=False,
+    )
+
+    admin_token = await login(client, "safe_admin")
+
+    self_delete = await client.delete(
+        f"/api/v1/users/{admin.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert self_delete.status_code == 400
+
+    demote_last_admin = await client.put(
+        f"/api/v1/users/{admin.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"is_admin": False},
+    )
+    assert demote_last_admin.status_code == 400
+
+    disable_last_admin = await client.put(
+        f"/api/v1/users/{admin.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"is_active": False},
+    )
+    assert disable_last_admin.status_code == 400
+
+    promote_member = await client.put(
+        f"/api/v1/users/{member.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"is_admin": True, "username": "safe_reviewer"},
+    )
+    assert promote_member.status_code == 200
+    assert promote_member.json()["is_admin"] is True
+    assert promote_member.json()["username"] == "safe_reviewer"
+
+    demote_original_admin = await client.put(
+        f"/api/v1/users/{admin.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"is_admin": False},
+    )
+    assert demote_original_admin.status_code == 200
+
+
 async def test_category_mutations_require_admin(
     client: AsyncClient,
     db_session: AsyncSession,

@@ -14,10 +14,14 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
+    username: Optional[str] = Field(None, min_length=3, max_length=50)
+    email: Optional[EmailStr] = None
     display_name: Optional[str] = Field(None, max_length=100)
     avatar_url: Optional[str] = Field(None, max_length=500)
     bio: Optional[str] = Field(None, max_length=500)
     website: Optional[str] = Field(None, max_length=200)
+    is_active: Optional[bool] = None
+    is_admin: Optional[bool] = None
 
 
 class UserLogin(BaseModel):

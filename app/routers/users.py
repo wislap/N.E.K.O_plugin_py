@@ -4,7 +4,7 @@ from sqlalchemy import select, func, or_
 
 from app.core.database import get_db
 from app.core.security import get_current_user, get_current_admin_user
-from app.schemas.user import User, UserCreate, UserUpdate
+from app.schemas.user import User, UserUpdate
 from app.schemas.common import MessageResponse, PaginatedResponse
 from app.models.user import User as UserModel
 
@@ -86,74 +86,6 @@ async def get_user(
     return user
 
 
-@router.get("/users/username/{username}", response_model=User)
-async def get_user_by_username(
-    username: str,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    通过用户名获取用户详情
-    """
-    result = await db.execute(
-        select(UserModel).where(UserModel.username == username)
-    )
-    user = result.scalar_one_or_none()
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="用户不存在"
-        )
-    
-    return user
-
-
-@router.post("/users", response_model=User, status_code=status.HTTP_201_CREATED)
-async def create_user(
-    user_data: UserCreate,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    注册新用户
-    """
-    # 检查用户名是否已存在
-    result = await db.execute(
-        select(UserModel).where(UserModel.username == user_data.username)
-    )
-    if result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="用户名已存在"
-        )
-    
-    # 检查邮箱是否已存在
-    result = await db.execute(
-        select(UserModel).where(UserModel.email == user_data.email)
-    )
-    if result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="邮箱已存在"
-        )
-    
-    # 创建用户（密码需要加密）
-    from passlib.context import CryptContext
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    
-    user = UserModel(
-        username=user_data.username,
-        email=user_data.email,
-        hashed_password=pwd_context.hash(user_data.password),
-        display_name=user_data.display_name
-    )
-    
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    
-    return user
-
-
 @router.put("/users/{user_id}", response_model=User)
 async def update_user(
     user_id: int,
@@ -182,6 +114,52 @@ async def update_user(
         )
     
     update_dict = update_data.model_dump(exclude_unset=True)
+    admin_only_fields = {"username", "email", "is_active", "is_admin"}
+    if not current_user.is_admin:
+        update_dict = {
+            key: value for key, value in update_dict.items()
+            if key not in admin_only_fields
+        }
+
+    if "username" in update_dict and update_dict["username"] != user.username:
+        existing = await db.execute(
+            select(UserModel).where(UserModel.username == update_dict["username"])
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="用户名已存在"
+            )
+
+    if "email" in update_dict and update_dict["email"] != user.email:
+        existing = await db.execute(
+            select(UserModel).where(UserModel.email == update_dict["email"])
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="邮箱已存在"
+            )
+
+    if current_user.is_admin and user.is_admin:
+        admin_count = (
+            await db.execute(
+                select(func.count(UserModel.id)).where(
+                    UserModel.is_admin == True,
+                    UserModel.is_active == True,
+                )
+            )
+        ).scalar() or 0
+        removing_last_admin = (
+            update_dict.get("is_admin") is False
+            or update_dict.get("is_active") is False
+        )
+        if admin_count <= 1 and removing_last_admin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="不能禁用或降级最后一个管理员"
+            )
+
     for field, value in update_dict.items():
         setattr(user, field, value)
     
@@ -209,6 +187,27 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="用户不存在"
         )
+
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能删除当前登录用户"
+        )
+
+    if user.is_admin and user.is_active:
+        admin_count = (
+            await db.execute(
+                select(func.count(UserModel.id)).where(
+                    UserModel.is_admin == True,
+                    UserModel.is_active == True,
+                )
+            )
+        ).scalar() or 0
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="不能删除最后一个管理员"
+            )
     
     await db.delete(user)
     await db.commit()
@@ -216,9 +215,3 @@ async def delete_user(
     return MessageResponse(message="用户已删除")
 
 
-# TODO: 添加登录/认证相关接口
-# @router.post("/auth/login")
-# async def login(...)
-# 
-# @router.post("/auth/refresh")
-# async def refresh_token(...)

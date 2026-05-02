@@ -36,7 +36,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { adminApi } from "@/services/api";
+import { adminApi } from "@/services/adminApi";
 
 interface Permission {
   id: string;

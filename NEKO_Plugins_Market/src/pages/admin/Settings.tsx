@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { adminApi, type SystemSetting } from "@/services/api";
+import { adminApi, type SystemSetting } from "@/services/adminApi";
 
 type EditableValue = string | number | boolean | null;
 

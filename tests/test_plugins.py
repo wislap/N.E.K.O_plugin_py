@@ -181,8 +181,14 @@ async def test_admin_reject_records_review_feedback_for_owner(
     plugin = create_response.json()
 
     pending_status_list = await client.get("/api/v1/plugins?status=pending")
-    assert pending_status_list.status_code == 200
-    assert pending_status_list.json()["total"] == 1
+    assert pending_status_list.status_code == 403
+
+    admin_pending_status_list = await client.get(
+        "/api/v1/admin/plugins?status=pending",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert admin_pending_status_list.status_code == 200
+    assert admin_pending_status_list.json()["total"] == 1
 
     reject_response = await client.post(
         f"/api/v1/plugins/{plugin['id']}/reject",
@@ -198,8 +204,14 @@ async def test_admin_reject_records_review_feedback_for_owner(
     assert rejected_reviews_response.status_code == 404
 
     rejected_status_list = await client.get("/api/v1/plugins?status=rejected")
-    assert rejected_status_list.status_code == 200
-    assert rejected_status_list.json()["total"] == 1
+    assert rejected_status_list.status_code == 403
+
+    admin_rejected_status_list = await client.get(
+        "/api/v1/admin/plugins?status=rejected",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert admin_rejected_status_list.status_code == 200
+    assert admin_rejected_status_list.json()["total"] == 1
 
     my_plugins_response = await client.get(
         "/api/v1/plugins/mine",
@@ -209,6 +221,74 @@ async def test_admin_reject_records_review_feedback_for_owner(
     my_plugin = my_plugins_response.json()[0]
     assert my_plugin["status"] == "rejected"
     assert my_plugin["review_summary"]["manual_review_notes"] == "缺少 README 和安装说明"
+
+
+async def test_submit_review_requires_plugin_owner_or_admin(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    await create_test_user(
+        db_session,
+        username="review_owner",
+        email="review-owner@example.com",
+        is_admin=False,
+    )
+    await create_test_user(
+        db_session,
+        username="review_intruder",
+        email="review-intruder@example.com",
+        is_admin=False,
+    )
+    await create_test_user(
+        db_session,
+        username="review_admin",
+        email="review-admin@example.com",
+        is_admin=True,
+    )
+
+    owner_token = await login(client, "review_owner")
+    intruder_token = await login(client, "review_intruder")
+
+    create_response = await client.post(
+        "/api/v1/plugins",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={
+            "name": "Review Protected Plugin",
+            "slug": "review-protected-plugin",
+            "description": "Only the owner can submit this for review",
+            "repo_url": "https://github.com/neko/n.e.k.o_plugin_review_protected",
+        },
+    )
+    assert create_response.status_code == 201
+    plugin = create_response.json()
+
+    intruder_submit = await client.post(
+        f"/api/v1/plugins/{plugin['id']}/submit-review",
+        headers={"Authorization": f"Bearer {intruder_token}"},
+        params={"repo_url": "https://github.com/neko/n.e.k.o_plugin_evil_fork"},
+    )
+    assert intruder_submit.status_code == 403
+
+    owner_submit = await client.post(
+        f"/api/v1/plugins/{plugin['id']}/submit-review",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        params={"repo_url": "https://github.com/neko/n.e.k.o_plugin_review_protected"},
+    )
+    assert owner_submit.status_code == 200
+    assert owner_submit.json()["stage"] == "submitted"
+
+    intruder_active_review = await client.get(
+        f"/api/v1/plugins/{plugin['id']}/active-review",
+        headers={"Authorization": f"Bearer {intruder_token}"},
+    )
+    assert intruder_active_review.status_code == 403
+
+    owner_active_review = await client.get(
+        f"/api/v1/plugins/{plugin['id']}/active-review",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert owner_active_review.status_code == 200
+    assert owner_active_review.json()["stage"] == "submitted"
 
 
 async def test_debug_auth_allows_plugin_upload_without_token(client: AsyncClient, monkeypatch):

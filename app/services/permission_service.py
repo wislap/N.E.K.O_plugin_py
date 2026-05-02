@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import selectinload
 from typing import List, Optional, Set, Dict, Any
-from datetime import datetime
 
 from app.models.permission import (
     Permission,

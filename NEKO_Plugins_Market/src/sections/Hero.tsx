@@ -4,11 +4,21 @@ import { ArrowRight, Download, Users, Package, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { stats as fallbackStats } from '@/data';
 import { formatNumber } from '@/lib/utils';
+import { isDebugDataEnabled } from '@/lib/debug';
 import { marketApi, type MarketStats } from '@/services/api';
+
+const emptyStats: MarketStats = {
+  totalPlugins: 0,
+  totalDownloads: 0,
+  activeDevelopers: 0,
+  newPluginsThisWeek: 0,
+};
 
 export function Hero() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [stats, setStats] = useState<MarketStats>(fallbackStats);
+  const [stats, setStats] = useState<MarketStats>(
+    isDebugDataEnabled ? fallbackStats : emptyStats
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -119,7 +129,7 @@ export function Hero() {
         }
       })
       .catch(() => {
-        if (isMounted) {
+        if (isMounted && isDebugDataEnabled) {
           setStats(fallbackStats);
         }
       });

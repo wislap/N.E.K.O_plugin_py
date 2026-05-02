@@ -3,7 +3,6 @@
 用于存储管理后台配置，如 SMTP 设置
 """
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean
-from datetime import datetime
 
 from app.core.database import Base
 from app.core.time import utc_now
