@@ -163,7 +163,11 @@ export function PluginCard({ plugin }: PluginCardProps) {
             href={plugin.githubRepo}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              window.open(plugin.githubRepo, '_blank', 'noopener,noreferrer');
+            }}
             className="flex items-center gap-1 text-slate-500 hover:text-white transition-colors"
           >
             <Github className="w-4 h-4" />

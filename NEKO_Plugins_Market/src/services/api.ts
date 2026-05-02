@@ -1,4 +1,4 @@
-import type { Plugin as MarketPlugin, Rating, Zone } from "@/types";
+import type { Plugin as MarketPlugin, Rating, Review as MarketReview, Zone } from "@/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
@@ -53,10 +53,12 @@ export interface Plugin {
 
 export interface Role {
   id: number;
+  code?: string;
   name: string;
   description: string;
   permissions: string[];
   user_count: number;
+  is_system?: boolean;
 }
 
 export interface DashboardStats {
@@ -67,6 +69,13 @@ export interface DashboardStats {
   rejectedPlugins: number;
   recentUsers: number;
   recentPlugins: number;
+}
+
+export interface MarketStats {
+  totalPlugins: number;
+  totalDownloads: number;
+  activeDevelopers: number;
+  newPluginsThisWeek: number;
 }
 
 export interface SMTPSettings {
@@ -143,6 +152,12 @@ interface PluginCreateRequest {
   tags?: string[];
 }
 
+interface ReviewCreateRequest {
+  rating: number;
+  title?: string;
+  content?: string;
+}
+
 type PluginQuery = {
   q?: string;
   category?: string;
@@ -212,6 +227,13 @@ function del<T>(path: string) {
   return request<T>(path, { method: "DELETE" });
 }
 
+function delWithBody<T>(path: string, body: RequestBody) {
+  return request<T>(path, {
+    method: "DELETE",
+    body: JSON.stringify(body)
+  });
+}
+
 function normalizePlugins(data: Plugin[] | PaginatedResponse<Plugin>): Plugin[] {
   return Array.isArray(data) ? data : data.items;
 }
@@ -266,6 +288,7 @@ function toMarketPlugin(plugin: Plugin): MarketPlugin {
       github: githubProfile(plugin.repo_url)
     },
     githubRepo: plugin.repo_url ?? "",
+    downloadUrl: plugin.download_url ?? plugin.repo_url ?? "",
     zone: (plugin.zone_slug as MarketPlugin["zone"] | null) ?? zoneSlugFromId(plugin.zone_id),
     tags: plugin.tags ?? [],
     downloads: plugin.download_count,
@@ -276,6 +299,36 @@ function toMarketPlugin(plugin: Plugin): MarketPlugin {
     createdAt: plugin.created_at,
     updatedAt: plugin.updated_at,
     isRecommended: Boolean(plugin.is_featured)
+  };
+}
+
+function toMarketReview(review: {
+  id: number;
+  plugin_id: number;
+  rating: number;
+  title?: string | null;
+  content?: string | null;
+  created_at: string;
+  author?: {
+    username: string;
+    display_name?: string | null;
+    avatar_url?: string | null;
+  } | null;
+}): MarketReview {
+  const userName = review.author?.display_name || review.author?.username || "匿名用户";
+
+  return {
+    id: String(review.id),
+    pluginId: String(review.plugin_id),
+    user: {
+      name: userName,
+      avatar: review.author?.avatar_url ?? ""
+    },
+    rating: review.rating,
+    title: review.title ?? undefined,
+    content: review.content ?? "",
+    likes: 0,
+    createdAt: review.created_at
   };
 }
 
@@ -297,22 +350,38 @@ function recentCount(items: Array<{ created_at: string }>) {
   return items.filter((item) => new Date(item.created_at).getTime() >= weekAgo).length;
 }
 
-let rolesStore: Role[] = [
-  {
-    id: 1,
-    name: "超级管理员",
-    description: "拥有所有权限",
-    permissions: ["plugin_review", "plugin_manage", "user_manage", "system_setting", "log_view", "smtp_setting"],
-    user_count: 1
-  },
-  {
-    id: 2,
-    name: "审核员",
-    description: "负责插件审核",
-    permissions: ["plugin_review", "log_view"],
-    user_count: 0
-  }
-];
+function recentMarketCount(items: Array<{ createdAt: string }>) {
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  return items.filter((item) => new Date(item.createdAt).getTime() >= weekAgo).length;
+}
+
+function toRole(group: {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  is_system?: boolean;
+  permissions?: Array<{ code: string }>;
+}): Role {
+  return {
+    id: group.id,
+    code: group.code,
+    name: group.name,
+    description: group.description ?? "",
+    permissions: group.permissions?.map((permission) => permission.code) ?? [],
+    user_count: 0,
+    is_system: group.is_system ?? false
+  };
+}
+
+function roleCodeFromName(name: string) {
+  const normalized = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return `custom_${normalized || Date.now()}`;
+}
 
 export const authApi = {
   register(data: RegisterRequest) {
@@ -375,12 +444,71 @@ export const pluginsApi = {
 
   create(data: PluginCreateRequest) {
     return post<Plugin>("/plugins", data);
+  },
+
+  recordDownload(pluginId: string) {
+    return post<{ message: string; success: boolean }>(`/plugins/${pluginId}/download`);
+  }
+};
+
+export const reviewsApi = {
+  async list(pluginId: string) {
+    const data = await request<PaginatedResponse<{
+      id: number;
+      plugin_id: number;
+      rating: number;
+      title?: string | null;
+      content?: string | null;
+      created_at: string;
+      author?: {
+        username: string;
+        display_name?: string | null;
+        avatar_url?: string | null;
+      } | null;
+    }>>(`/plugins/${pluginId}/reviews`);
+
+    return {
+      ...data,
+      items: data.items.map(toMarketReview)
+    };
+  },
+
+  async create(pluginId: string, data: ReviewCreateRequest) {
+    const review = await post<{
+      id: number;
+      plugin_id: number;
+      rating: number;
+      title?: string | null;
+      content?: string | null;
+      created_at: string;
+      author?: {
+        username: string;
+        display_name?: string | null;
+        avatar_url?: string | null;
+      } | null;
+    }>(`/plugins/${pluginId}/reviews`, data);
+
+    return toMarketReview(review);
   }
 };
 
 export const zonesApi = {
   list() {
     return request<Zone[]>("/zones");
+  }
+};
+
+export const marketApi = {
+  async getStats(): Promise<MarketStats> {
+    const data = await pluginsApi.list({ page_size: 100 });
+    const plugins = data.items;
+
+    return {
+      totalPlugins: data.total,
+      totalDownloads: plugins.reduce((total, plugin) => total + plugin.downloads, 0),
+      activeDevelopers: new Set(plugins.map((plugin) => plugin.author.name)).size,
+      newPluginsThisWeek: recentMarketCount(plugins)
+    };
   }
 };
 
@@ -446,33 +574,69 @@ export const adminApi = {
   },
 
   async getRoles() {
-    return rolesStore;
+    const groups = await request<Array<{
+      id: number;
+      code: string;
+      name: string;
+      description?: string | null;
+      is_system?: boolean;
+      permissions?: Array<{ code: string }>;
+    }>>("/permissions/groups");
+    return groups.map(toRole);
   },
 
   async createRole(data: Omit<Role, "id" | "user_count">) {
-    const role = {
-      ...data,
-      id: Date.now(),
-      user_count: 0
-    };
-    rolesStore = [...rolesStore, role];
-    return role;
+    const group = await post<{
+      id: number;
+      code: string;
+      name: string;
+      description?: string | null;
+      is_system?: boolean;
+      permissions?: Array<{ code: string }>;
+    }>("/permissions/groups/create", {
+      code: data.code || roleCodeFromName(data.name),
+      name: data.name,
+      description: data.description,
+      permission_codes: data.permissions
+    });
+    return toRole(group);
   },
 
   async updateRole(roleId: number, data: Partial<Role>) {
-    rolesStore = rolesStore.map((role) =>
-      role.id === roleId ? { ...role, ...data } : role
-    );
-    const role = rolesStore.find((item) => item.id === roleId);
-    if (!role) {
-      throw new Error("角色不存在");
+    const currentRoles = await this.getRoles();
+    const currentRole = currentRoles.find((role) => role.id === roleId);
+    const group = await put<{
+      id: number;
+      code: string;
+      name: string;
+      description?: string | null;
+      is_system?: boolean;
+      permissions?: Array<{ code: string }>;
+    }>(`/permissions/groups/${roleId}`, {
+      name: data.name,
+      description: data.description
+    });
+
+    if (data.permissions && currentRole) {
+      const currentPermissions = new Set(currentRole.permissions);
+      const nextPermissions = new Set(data.permissions);
+      const toAdd = data.permissions.filter((code) => !currentPermissions.has(code));
+      const toRemove = currentRole.permissions.filter((code) => !nextPermissions.has(code));
+
+      if (toAdd.length > 0) {
+        await post(`/permissions/groups/${roleId}/permissions`, toAdd);
+      }
+      if (toRemove.length > 0) {
+        await delWithBody(`/permissions/groups/${roleId}/permissions`, toRemove);
+      }
     }
-    return role;
+
+    const roles = await this.getRoles();
+    return roles.find((role) => role.id === roleId) ?? toRole(group);
   },
 
   async deleteRole(roleId: number) {
-    rolesStore = rolesStore.filter((role) => role.id !== roleId);
-    return { message: "角色已删除" };
+    return del<{ message: string }>(`/permissions/groups/${roleId}`);
   },
 
   getSMTPSettings() {

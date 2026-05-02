@@ -18,6 +18,7 @@ export interface Plugin {
   version: string;
   author: Author;
   githubRepo: string;
+  downloadUrl?: string;
   zone: 'game' | 'companion' | 'function' | 'entertainment' | 'tool';
   tags: string[];
   downloads: number;
@@ -37,6 +38,8 @@ export interface Review {
     name: string;
     avatar: string;
   };
+  rating?: number;
+  title?: string;
   content: string;
   likes: number;
   createdAt: string;

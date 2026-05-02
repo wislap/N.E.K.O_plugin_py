@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   Download,
   ThumbsUp,
@@ -21,7 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { formatDate, formatNumber, getZoneById } from '@/lib/utils';
 import { marked } from 'marked';
 import 'highlight.js/styles/github-dark.css';
-import { pluginsApi } from '@/services/api';
+import { pluginsApi, reviewsApi } from '@/services/api';
 import type { Plugin, Review } from '@/types';
 
 const ratingColors: Record<string, string> = {
@@ -34,12 +34,18 @@ const ratingColors: Record<string, string> = {
 
 export function PluginDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('readme');
   const [reviewContent, setReviewContent] = useState('');
+  const [reviewTitle, setReviewTitle] = useState('');
+  const [reviewRating, setReviewRating] = useState(5);
   const [plugin, setPlugin] = useState<Plugin | null>(null);
-  const [pluginReviews] = useState<Review[]>([]);
+  const [pluginReviews, setPluginReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [reviewError, setReviewError] = useState('');
   const zone = plugin ? getZoneById(plugin.zone) : undefined;
 
   useEffect(() => {
@@ -59,8 +65,10 @@ export function PluginDetail() {
         setIsLoading(true);
         setErrorMessage('');
         const data = await pluginsApi.getById(id);
+        const reviews = await reviewsApi.list(id);
         if (isMounted) {
           setPlugin(data);
+          setPluginReviews(reviews.items);
         }
       } catch (error) {
         if (isMounted) {
@@ -80,6 +88,60 @@ export function PluginDetail() {
       isMounted = false;
     };
   }, [id]);
+
+  const handleDownload = async () => {
+    if (!plugin || isDownloading) {
+      return;
+    }
+
+    setIsDownloading(true);
+    try {
+      await pluginsApi.recordDownload(plugin.id);
+      setPlugin({
+        ...plugin,
+        downloads: plugin.downloads + 1
+      });
+    } catch {
+      // 下载入口仍然可用，计数失败时不阻断用户获取插件。
+    } finally {
+      setIsDownloading(false);
+    }
+
+    const target = plugin.downloadUrl || plugin.githubRepo;
+    if (target) {
+      window.open(target, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const submitReview = async () => {
+    if (!plugin || isSubmittingReview) {
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate(`/login?next=${encodeURIComponent(`/plugin/${plugin.id}`)}`);
+      return;
+    }
+
+    setReviewError('');
+    setIsSubmittingReview(true);
+    try {
+      const review = await reviewsApi.create(plugin.id, {
+        rating: reviewRating,
+        title: reviewTitle.trim() || undefined,
+        content: reviewContent.trim() || undefined
+      });
+      setPluginReviews((items) => [review, ...items]);
+      setReviewTitle('');
+      setReviewContent('');
+      setReviewRating(5);
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : '评论提交失败');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -231,9 +293,11 @@ export function PluginDetail() {
 
               <Button
                 className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-95 text-primary-foreground py-6"
+                onClick={handleDownload}
+                disabled={isDownloading}
               >
                 <Download className="w-5 h-5 mr-2" />
-                安装插件
+                {isDownloading ? '正在记录...' : '安装插件'}
               </Button>
 
               <a
@@ -416,6 +480,38 @@ export function PluginDetail() {
                 <div className="space-y-4">
                   <div>
                     <label className="text-sm text-slate-400 mb-2 block">
+                      评分
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {[5, 4, 3, 2, 1].map((rating) => (
+                        <button
+                          key={rating}
+                          type="button"
+                          onClick={() => setReviewRating(rating)}
+                          className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                            reviewRating === rating
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white'
+                          }`}
+                        >
+                          {rating} 分
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm text-slate-400 mb-2 block">
+                      标题
+                    </label>
+                    <input
+                      value={reviewTitle}
+                      onChange={(e) => setReviewTitle(e.target.value)}
+                      placeholder="一句话总结体验"
+                      className="w-full rounded-md border border-slate-700 bg-[#0F0F1A] px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm text-slate-400 mb-2 block">
                       评论内容
                     </label>
                     <Textarea
@@ -425,9 +521,16 @@ export function PluginDetail() {
                       className="bg-[#0F0F1A] border-slate-700 text-slate-200 placeholder:text-slate-600 min-h-[100px]"
                     />
                   </div>
-                  <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                  {reviewError && (
+                    <p className="text-sm text-red-400">{reviewError}</p>
+                  )}
+                  <Button
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                    onClick={submitReview}
+                    disabled={isSubmittingReview || (!reviewTitle.trim() && !reviewContent.trim())}
+                  >
                     <MessageSquare className="w-4 h-4 mr-2" />
-                    发表评论
+                    {isSubmittingReview ? '提交中...' : '发表评论'}
                   </Button>
                 </div>
               </div>
@@ -460,8 +563,14 @@ export function PluginDetail() {
                         </div>
                       </div>
                     </div>
-                    <p className="text-slate-300 mb-4">{review.content}</p>
+                    {review.title && (
+                      <h4 className="mb-2 font-medium text-white">{review.title}</h4>
+                    )}
+                    <p className="text-slate-300 mb-4">{review.content || '未填写评论内容'}</p>
                     <div className="flex items-center gap-4">
+                      <span className="rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">
+                        {review.rating ?? 5} 分
+                      </span>
                       <button className="flex items-center gap-1.5 text-slate-500 hover:text-primary transition-colors">
                         <ThumbsUp className="w-4 h-4" />
                         <span className="text-sm">{review.likes}</span>

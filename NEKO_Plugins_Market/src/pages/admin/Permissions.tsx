@@ -50,15 +50,17 @@ interface Role {
   description: string;
   permissions: string[];
   user_count: number;
+  is_system?: boolean;
 }
 
 const AVAILABLE_PERMISSIONS: Permission[] = [
-  { id: "plugin_review", name: "插件审核", description: "审核插件提交" },
-  { id: "plugin_manage", name: "插件管理", description: "管理所有插件" },
-  { id: "user_manage", name: "用户管理", description: "管理用户账户" },
-  { id: "system_setting", name: "系统设置", description: "修改系统配置" },
-  { id: "log_view", name: "日志查看", description: "查看系统日志" },
-  { id: "smtp_setting", name: "SMTP设置", description: "配置邮件服务" }
+  { id: "plugin:review", name: "插件审核", description: "审核插件提交" },
+  { id: "plugin:manage", name: "插件管理", description: "管理所有插件" },
+  { id: "system:user", name: "用户管理", description: "管理用户账户" },
+  { id: "system:settings", name: "系统设置", description: "修改系统配置" },
+  { id: "system:logs", name: "日志查看", description: "查看系统日志" },
+  { id: "system:smtp", name: "SMTP设置", description: "配置邮件服务" },
+  { id: "system:permission", name: "权限管理", description: "管理权限组和授权" }
 ];
 
 export default function AdminPermissions() {
@@ -84,30 +86,7 @@ export default function AdminPermissions() {
       setRoles(data);
     } catch (error) {
       console.error("获取角色列表失败:", error);
-      // 使用默认数据
-      setRoles([
-        {
-          id: 1,
-          name: "超级管理员",
-          description: "拥有所有权限",
-          permissions: AVAILABLE_PERMISSIONS.map((p) => p.id),
-          user_count: 1
-        },
-        {
-          id: 2,
-          name: "审核员",
-          description: "负责插件审核",
-          permissions: ["plugin_review", "log_view"],
-          user_count: 2
-        },
-        {
-          id: 3,
-          name: "运营",
-          description: "日常运营管理",
-          permissions: ["user_manage", "plugin_manage", "log_view"],
-          user_count: 3
-        }
-      ]);
+      setRoles([]);
     } finally {
       setIsLoading(false);
     }
@@ -199,14 +178,16 @@ export default function AdminPermissions() {
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleEdit(role)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    {role.id > 3 && (
+                    {!role.is_system && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEdit(role)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {!role.is_system && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -225,6 +206,11 @@ export default function AdminPermissions() {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Users className="h-4 w-4" />
                   {role.user_count} 个用户
+                  {role.is_system && (
+                    <Badge variant="outline" className="ml-auto text-xs">
+                      系统内置
+                    </Badge>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">权限</Label>

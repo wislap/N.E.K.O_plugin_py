@@ -120,7 +120,6 @@ async def upsert_plugin(db, plugin_data: dict, users: dict[str, User], zones: di
     if plugin is None:
         plugin = Plugin(slug=plugin_data["slug"], author_id=author.id, author_name=author.username)
         db.add(plugin)
-        await db.flush()
     else:
         await remove_existing_plugin_artifacts(db, plugin)
 
@@ -150,8 +149,14 @@ async def upsert_plugin(db, plugin_data: dict, users: dict[str, User], zones: di
     plugin.is_featured = 1 if status == PluginStatus.APPROVED else 0
     plugin.published_at = now if status in {PluginStatus.APPROVED, PluginStatus.DISABLED} else None
 
-    plugin.categories = [categories[slug] for slug in plugin_data["categories"]]
     await db.flush()
+    for category_slug in plugin_data["categories"]:
+        db.add(
+            PluginCategory(
+                plugin_id=plugin.id,
+                category_id=categories[category_slug].id,
+            )
+        )
 
     stage = review_stage_for_status(status)
     reviewer = users["reviewer"]

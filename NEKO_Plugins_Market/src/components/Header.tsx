@@ -1,7 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Github, Menu, X, Cat, User, LogOut } from 'lucide-react';
+import { Search, Github, Menu, X, Cat, LogOut, Package, Upload, ShieldCheck } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { authApi, type User as ApiUser } from '@/services/api';
 
@@ -93,6 +102,7 @@ export function Header() {
   };
 
   const userLabel = currentUser?.display_name || currentUser?.username;
+  const userInitial = userLabel?.slice(0, 1).toUpperCase() || 'U';
 
   return (
     <header
@@ -160,20 +170,77 @@ export function Header() {
               <Github className="w-5 h-5" />
             </a>
             {currentUser ? (
-              <div className="ml-2 flex items-center gap-2">
-                <div className="hidden lg:flex items-center gap-2 rounded-full bg-white/5 px-3 py-2 text-sm text-slate-200">
-                  <User className="w-4 h-4" />
-                  <span className="max-w-28 truncate">{userLabel}</span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-slate-300 hover:text-white hover:bg-white/5"
-                  onClick={logout}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="ml-2 flex items-center gap-2 rounded-full border border-white/10 bg-white/5 p-1 pr-3 text-sm text-slate-200 transition-colors hover:border-primary/40 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    aria-label="打开用户菜单"
+                  >
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={currentUser.avatar_url ?? undefined} alt={userLabel} />
+                      <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                        {userInitial}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="hidden max-w-28 truncate lg:inline">{userLabel}</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  sideOffset={10}
+                  className="w-64 border-slate-800 bg-[#111827]/95 p-2 text-slate-200 shadow-2xl shadow-black/40 backdrop-blur-xl"
                 >
-                  <LogOut className="w-5 h-5" />
-                </Button>
-              </div>
+                  <DropdownMenuLabel className="px-3 py-2">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={currentUser.avatar_url ?? undefined} alt={userLabel} />
+                        <AvatarFallback className="bg-primary text-primary-foreground">
+                          {userInitial}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-white">{userLabel}</div>
+                        <div className="truncate text-xs font-normal text-slate-400">{currentUser.email}</div>
+                      </div>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator className="bg-slate-800" />
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-lg px-3 py-2 text-slate-300 focus:bg-white/10 focus:text-white"
+                    onClick={() => navigate('/my/plugins')}
+                  >
+                    <Package className="h-4 w-4" />
+                    我的插件
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-lg px-3 py-2 text-slate-300 focus:bg-white/10 focus:text-white"
+                    onClick={() => navigate('/upload')}
+                  >
+                    <Upload className="h-4 w-4" />
+                    上传插件
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-lg px-3 py-2 text-slate-300 focus:bg-white/10 focus:text-white"
+                    onClick={logout}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    退出登录
+                  </DropdownMenuItem>
+                  {currentUser.is_admin && (
+                    <>
+                      <DropdownMenuSeparator className="bg-slate-800" />
+                      <DropdownMenuItem
+                        className="cursor-pointer rounded-lg border border-primary/20 bg-primary/10 px-3 py-2 text-primary focus:bg-primary/20 focus:text-primary"
+                        onClick={() => navigate('/admin')}
+                      >
+                        <ShieldCheck className="h-4 w-4" />
+                        管理员面板
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
               <div className="ml-2 flex items-center gap-2">
                 <Link to="/login">
@@ -247,17 +314,29 @@ export function Header() {
                 GitHub
               </a>
               {currentUser ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    logout();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <LogOut className="w-4 h-4" />
-                  退出登录
-                </button>
+                <>
+                  {currentUser.is_admin && (
+                    <Link
+                      to="/admin"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="px-4 py-2 text-sm font-medium text-primary hover:text-primary hover:bg-primary/10 rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      管理员面板
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      logout();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    退出登录
+                  </button>
+                </>
               ) : (
                 <div className="grid grid-cols-2 gap-2 px-4 pt-2">
                   <Link

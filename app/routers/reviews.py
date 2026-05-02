@@ -8,6 +8,7 @@ from app.models.user import User
 from app.schemas.review import Review, ReviewCreate, ReviewUpdate
 from app.schemas.common import PaginatedResponse, MessageResponse
 from app.services.review_service import ReviewService
+from app.models.plugin import PluginStatus
 from app.services.plugin_service import PluginService
 
 router = APIRouter()
@@ -25,10 +26,10 @@ async def list_plugin_reviews(
     """
     # 检查插件是否存在
     plugin = await PluginService.get_plugin_by_id(db, plugin_id)
-    if not plugin:
+    if not plugin or plugin.status != PluginStatus.APPROVED:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="插件不存在"
+            detail="插件不存在或尚未发布"
         )
     
     result = await ReviewService.get_plugin_reviews(db, plugin_id, page, page_size)
@@ -44,10 +45,10 @@ async def get_rating_distribution(
     获取插件评分分布
     """
     plugin = await PluginService.get_plugin_by_id(db, plugin_id)
-    if not plugin:
+    if not plugin or plugin.status != PluginStatus.APPROVED:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="插件不存在"
+            detail="插件不存在或尚未发布"
         )
     
     distribution = await ReviewService.get_rating_distribution(db, plugin_id)
@@ -70,10 +71,10 @@ async def create_review(
     """
     # 检查插件是否存在
     plugin = await PluginService.get_plugin_by_id(db, plugin_id)
-    if not plugin:
+    if not plugin or plugin.status != PluginStatus.APPROVED:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="插件不存在"
+            detail="插件不存在或尚未发布"
         )
     
     try:

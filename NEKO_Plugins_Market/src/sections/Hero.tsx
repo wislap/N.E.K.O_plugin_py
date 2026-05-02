@@ -1,12 +1,14 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Download, Users, Package, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { stats } from '@/data';
+import { stats as fallbackStats } from '@/data';
 import { formatNumber } from '@/lib/utils';
+import { marketApi, type MarketStats } from '@/services/api';
 
 export function Hero() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [stats, setStats] = useState<MarketStats>(fallbackStats);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -104,6 +106,26 @@ export function Hero() {
       window.removeEventListener('resize', resizeCanvas);
       cancelAnimationFrame(animationId);
       probe.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    marketApi.getStats()
+      .then((data) => {
+        if (isMounted) {
+          setStats(data);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setStats(fallbackStats);
+        }
+      });
+
+    return () => {
+      isMounted = false;
     };
   }, []);
 

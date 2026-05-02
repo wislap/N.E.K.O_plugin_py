@@ -79,6 +79,12 @@ async def test_plugin_create_approve_list_and_download(
     assert pending_list.status_code == 200
     assert pending_list.json()["total"] == 0
 
+    pending_detail = await client.get(f"/api/v1/plugins/{plugin['id']}")
+    assert pending_detail.status_code == 404
+
+    pending_download = await client.post(f"/api/v1/plugins/{plugin['id']}/download")
+    assert pending_download.status_code == 404
+
     approve_response = await client.post(
         f"/api/v1/plugins/{plugin['id']}/approve",
         headers={"Authorization": f"Bearer {admin_token}"},
@@ -88,6 +94,10 @@ async def test_plugin_create_approve_list_and_download(
     assert approve_response.json()["status"] == "approved"
     assert approve_response.json()["review_summary"]["stage"] == "approved"
     assert approve_response.json()["review_summary"]["manual_review_notes"] == "资料完整，审核通过"
+
+    approved_detail = await client.get(f"/api/v1/plugins/{plugin['id']}")
+    assert approved_detail.status_code == 200
+    assert approved_detail.json()["slug"] == "demo-plugin"
 
     approved_list = await client.get("/api/v1/plugins")
     assert approved_list.status_code == 200
@@ -101,6 +111,18 @@ async def test_plugin_create_approve_list_and_download(
     download_response = await client.post(f"/api/v1/plugins/{plugin['id']}/download")
     assert download_response.status_code == 200
     assert download_response.json()["success"] is True
+
+    review_response = await client.post(
+        f"/api/v1/plugins/{plugin['id']}/reviews",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"rating": 5, "title": "好用", "content": "闭环测试评论"},
+    )
+    assert review_response.status_code == 201
+    assert review_response.json()["content"] == "闭环测试评论"
+
+    reviews_response = await client.get(f"/api/v1/plugins/{plugin['id']}/reviews")
+    assert reviews_response.status_code == 200
+    assert reviews_response.json()["total"] == 1
 
 
 async def test_admin_reject_records_review_feedback_for_owner(
@@ -148,6 +170,9 @@ async def test_admin_reject_records_review_feedback_for_owner(
     assert reject_response.json()["status"] == "rejected"
     assert reject_response.json()["review_summary"]["stage"] == "rejected"
     assert reject_response.json()["review_summary"]["manual_review_notes"] == "缺少 README 和安装说明"
+
+    rejected_reviews_response = await client.get(f"/api/v1/plugins/{plugin['id']}/reviews")
+    assert rejected_reviews_response.status_code == 404
 
     rejected_status_list = await client.get("/api/v1/plugins?status=rejected")
     assert rejected_status_list.status_code == 200

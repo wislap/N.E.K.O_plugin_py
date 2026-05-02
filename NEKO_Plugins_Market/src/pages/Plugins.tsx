@@ -119,7 +119,7 @@ export function Plugins() {
     }
 
     return result;
-  }, [selectedZone, searchQuery, sortBy]);
+  }, [plugins, selectedZone, searchQuery, sortBy]);
 
   // Pagination
   const totalPages = Math.ceil(filteredPlugins.length / itemsPerPage);

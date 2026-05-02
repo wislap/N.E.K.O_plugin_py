@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.routers import plugins, categories, users, reviews, versions, auth, plugin_reviews, signatures, zones, permissions, logs, notifications, admin_settings
 from app.services.bootstrap_service import BootstrapService
+from app.services.permission_service import PermissionService
 
 
 @asynccontextmanager
@@ -17,6 +18,7 @@ async def lifespan(app: FastAPI):
     async with AsyncSessionLocal() as db:
         await BootstrapService.ensure_schema_compatibility(db)
         await BootstrapService.ensure_initial_admin(db)
+        await PermissionService().init_system_permissions(db)
     
     yield
     

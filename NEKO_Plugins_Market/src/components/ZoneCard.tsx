@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Gamepad2, Heart, Zap, Music, Wrench } from 'lucide-react';
+import { Gamepad2, Heart, Music, Settings, Sparkles, Wrench, Zap } from 'lucide-react';
 import type { Zone } from '@/types';
 import { listItem } from '@/lib/animations';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   Gamepad2,
   Heart,
+  Settings,
+  Sparkles,
   Zap,
   Music,
   Wrench,

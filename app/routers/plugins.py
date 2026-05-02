@@ -109,10 +109,10 @@ async def get_plugin(
     获取插件详情
     """
     plugin = await PluginService.get_plugin_by_id(db, plugin_id)
-    if not plugin:
+    if not plugin or plugin.status != PluginStatus.APPROVED:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="插件不存在"
+            detail="插件不存在或尚未发布"
         )
     return plugin
 
@@ -126,10 +126,10 @@ async def get_plugin_by_slug(
     通过slug获取插件详情
     """
     plugin = await PluginService.get_plugin_by_slug(db, slug)
-    if not plugin:
+    if not plugin or plugin.status != PluginStatus.APPROVED:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="插件不存在"
+            detail="插件不存在或尚未发布"
         )
     return plugin
 
@@ -277,10 +277,10 @@ async def record_download(
     记录插件下载
     """
     plugin = await PluginService.get_plugin_by_id(db, plugin_id)
-    if not plugin:
+    if not plugin or plugin.status != PluginStatus.APPROVED:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="插件不存在"
+            detail="插件不存在或尚未发布"
         )
     
     await PluginService.increment_download_count(db, plugin_id)

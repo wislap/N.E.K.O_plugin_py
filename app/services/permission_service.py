@@ -128,8 +128,20 @@ class PermissionService:
                         select(Permission).where(Permission.code == perm_code)
                     )
                     permission = result.scalar_one_or_none()
-                    if permission and permission not in group.permissions:
-                        group.permissions.append(permission)
+                    if permission:
+                        existing_item = await db.execute(
+                            select(permission_group_items.c.permission_id).where(
+                                permission_group_items.c.group_id == group.id,
+                                permission_group_items.c.permission_id == permission.id,
+                            )
+                        )
+                        if existing_item.scalar_one_or_none() is None:
+                            await db.execute(
+                                permission_group_items.insert().values(
+                                    group_id=group.id,
+                                    permission_id=permission.id,
+                                )
+                            )
         
         await db.commit()
     
