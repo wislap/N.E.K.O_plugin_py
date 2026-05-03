@@ -7,6 +7,7 @@ from app.models.plugin import Plugin
 from app.core.crypto import CodeSignatureService, generate_server_keypair
 from app.core.time import utc_now
 from app.services.github_service import GitHubService
+from app.services.transactions import commit_or_rollback
 
 
 class SignatureService:
@@ -47,20 +48,23 @@ class SignatureService:
             activated_at=utc_now()
         )
         
-        # 如果设置为默认，取消其他默认密钥
-        if set_as_default:
-            result = await db.execute(
-                select(ServerKeyPair).where(ServerKeyPair.is_default == True)
-            )
-            existing_defaults = result.scalars().all()
-            for kd in existing_defaults:
-                kd.is_default = False
-        
-        db.add(keypair)
-        await db.commit()
+        async with commit_or_rollback(db):
+            # 如果设置为默认，取消其他默认密钥
+            if set_as_default:
+                result = await db.execute(
+                    select(ServerKeyPair).where(ServerKeyPair.is_default == True)
+                )
+                existing_defaults = result.scalars().all()
+                for kd in existing_defaults:
+                    kd.is_default = False
+
+            self._add_keypair(db, keypair)
+
         await db.refresh(keypair)
-        
         return keypair
+
+    def _add_keypair(self, db: AsyncSession, keypair: ServerKeyPair) -> None:
+        db.add(keypair)
     
     async def get_default_keypair(self, db: AsyncSession) -> Optional[ServerKeyPair]:
         """获取默认密钥对"""
@@ -122,10 +126,10 @@ class SignatureService:
         if not keypair:
             raise ValueError("密钥对不存在")
         
-        keypair.is_active = False
-        keypair.deactivated_at = utc_now()
-        
-        await db.commit()
+        async with commit_or_rollback(db):
+            keypair.is_active = False
+            keypair.deactivated_at = utc_now()
+
         await db.refresh(keypair)
         return keypair
     
@@ -222,12 +226,12 @@ class SignatureService:
                 is_valid=True
             )
             
-            db.add(signature_record)
-            await db.commit()
+            async with commit_or_rollback(db):
+                db.add(signature_record)
+
             await db.refresh(signature_record)
-            
             return signature_record
-            
+
         except Exception as e:
             raise ValueError(f"签名失败: {str(e)}")
     
@@ -343,8 +347,8 @@ class SignatureService:
         )
         
         # 更新验证时间
-        sig_record.verified_at = utc_now()
-        await db.commit()
+        async with commit_or_rollback(db):
+            sig_record.verified_at = utc_now()
         
         # 计算当前文件哈希
         files_md5 = []
@@ -381,11 +385,10 @@ class SignatureService:
         if not sig:
             raise ValueError("签名记录不存在")
         
-        sig.is_valid = False
-        sig.revoked_at = utc_now()
-        sig.revoke_reason = reason
-        
-        await db.commit()
+        async with commit_or_rollback(db):
+            sig.is_valid = False
+            sig.revoked_at = utc_now()
+            sig.revoke_reason = reason
+
         await db.refresh(sig)
-        
         return sig

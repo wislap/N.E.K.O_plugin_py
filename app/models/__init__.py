@@ -13,6 +13,7 @@ from app.models.jwt_key import JWTKeyRecord
 from app.models.ai_sandbox_log import AISandboxLog
 from app.models.system_setting import SystemSetting, SMTPSettingKeys
 from app.models.notification import Notification
+from app.models.email_verification import EmailVerificationToken
 
 __all__ = [
     "Plugin", "PluginStatus",
@@ -30,4 +31,5 @@ __all__ = [
     "AISandboxLog",
     "SystemSetting", "SMTPSettingKeys",
     "Notification",
+    "EmailVerificationToken",
 ]

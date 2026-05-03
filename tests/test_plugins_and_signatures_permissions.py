@@ -1,7 +1,10 @@
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models import ServerKeyPair
+from app.services.signature_service import SignatureService
 from tests.conftest import create_test_user
 
 
@@ -119,3 +122,39 @@ async def test_signature_key_management_requires_admin(
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert admin_deactivate.status_code == 200
+
+
+async def test_default_keypair_switch_rolls_back_when_insert_fails(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    await create_test_user(db_session, "signature_atomic_admin", "signature-atomic-admin@example.com", is_admin=True)
+    admin_token = await login(client, "signature_atomic_admin")
+
+    initial_response = await client.post(
+        "/api/v1/admin/signatures/keys",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"name": "stable-default", "set_as_default": True},
+    )
+    assert initial_response.status_code == 201
+    initial_keypair_id = initial_response.json()["id"]
+
+    def fail_add_keypair(*args, **kwargs):
+        raise RuntimeError("key insert boom")
+
+    monkeypatch.setattr(SignatureService, "_add_keypair", fail_add_keypair)
+
+    with pytest.raises(RuntimeError, match="key insert boom"):
+        await client.post(
+            "/api/v1/admin/signatures/keys",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"name": "broken-default", "set_as_default": True},
+        )
+
+    initial_keypair = await db_session.get(ServerKeyPair, initial_keypair_id)
+    assert initial_keypair is not None
+    assert initial_keypair.is_default is True
+    assert await db_session.scalar(
+        select(ServerKeyPair.id).where(ServerKeyPair.name == "broken-default")
+    ) is None

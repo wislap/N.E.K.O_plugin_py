@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.core.security import get_current_user, get_or_create_debug_user, create_access_token, create_refresh_token
 from app.services.auth_service import AuthService
+from app.services.email_verification_service import email_verification_service
 from app.schemas.user import UserCreate, UserLogin, User, Token, PasswordChange
 from app.schemas.common import MessageResponse
 
@@ -26,12 +27,13 @@ async def register(
     用户注册
     """
     try:
-        user, access_token, refresh_token = await AuthService.register_user(db, user_data)
+        user, access_token, refresh_token, verification_email_sent = await AuthService.register_user(db, user_data)
         return {
             "user": serialize_user(user),
             "access_token": access_token,
             "refresh_token": refresh_token,
-            "token_type": "bearer"
+            "token_type": "bearer",
+            "verification_email_sent": verification_email_sent
         }
     except ValueError as e:
         raise HTTPException(
@@ -63,6 +65,46 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+@router.post("/auth/verify-email", response_model=User)
+async def verify_email(
+    token: str = Query(..., min_length=16),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    使用邮件链接中的 token 完成邮箱验证。
+    """
+    try:
+        user = await email_verification_service.verify(db, token)
+        return user
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.post("/auth/resend-verification-email", response_model=dict)
+async def resend_verification_email(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    为当前用户重新发送邮箱验证邮件。
+    """
+    try:
+        already_verified, sent = await email_verification_service.resend(db, current_user)
+        return {
+            "already_verified": already_verified,
+            "verification_email_sent": sent,
+            "message": "邮箱已验证" if already_verified else ("验证邮件已发送" if sent else "邮件服务未启用，暂未发送")
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(e)
         )
 
 

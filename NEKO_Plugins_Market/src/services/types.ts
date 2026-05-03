@@ -7,6 +7,8 @@ export interface User {
   is_admin: boolean;
   is_active: boolean;
   must_change_password: boolean;
+  email_verified_at?: string | null;
+  is_email_verified: boolean;
   created_at: string;
   updated_at?: string;
 }
@@ -135,6 +137,13 @@ export interface LoginResponse {
   access_token: string;
   refresh_token: string;
   token_type: string;
+  verification_email_sent?: boolean;
+}
+
+export interface ResendVerificationResponse {
+  already_verified: boolean;
+  verification_email_sent: boolean;
+  message: string;
 }
 
 export interface PaginatedResponse<T> {

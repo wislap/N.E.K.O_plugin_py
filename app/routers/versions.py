@@ -97,13 +97,10 @@ async def create_version(
         changelog=version_data.changelog,
         download_url=version_data.download_url,
         min_app_version=version_data.min_app_version,
-        max_app_version=version_data.max_app_version
+        max_app_version=version_data.max_app_version,
+        plugin=plugin
     )
-    
-    # 更新插件的当前版本
-    plugin.version = version_data.version
-    await db.commit()
-    
+
     return version
 
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Cat, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
+import { Cat, Eye, EyeOff, Lock, Mail, Sparkles, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,43 @@ import { isDebugAuthEnabled } from '@/lib/debug';
 import { getErrorMessage, notifySuccess, reportError } from '@/lib/error-reporting';
 
 type AuthMode = 'login' | 'register';
+
+const PASSWORD_SYMBOLS = '!@#$%&*?';
+const COMMON_LEAKED_PASSWORDS = new Set([
+  '123456',
+  '12345678',
+  '123456789',
+  'password',
+  'password123',
+  'qwerty',
+  '111111',
+  'admin123',
+  'root',
+  'root123'
+]);
+
+function createStrongPassword() {
+  const groups = [
+    'ABCDEFGHJKLMNPQRSTUVWXYZ',
+    'abcdefghijkmnopqrstuvwxyz',
+    '23456789',
+    PASSWORD_SYMBOLS
+  ];
+  const allChars = groups.join('');
+  const values = new Uint32Array(18);
+  crypto.getRandomValues(values);
+
+  const chars = groups.map((group, index) => group[values[index] % group.length]);
+  for (let index = chars.length; index < values.length; index += 1) {
+    chars.push(allChars[values[index] % allChars.length]);
+  }
+
+  return chars
+    .map((char, index) => ({ char, sort: values[index] }))
+    .sort((left, right) => left.sort - right.sort)
+    .map(({ char }) => char)
+    .join('');
+}
 
 function storeSession(response: Awaited<ReturnType<typeof authApi.login>>) {
   localStorage.setItem('token', response.access_token);
@@ -30,7 +67,8 @@ export function Auth() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [password, setPassword] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,6 +82,13 @@ export function Auth() {
   const submit = async (event: React.FormEvent, targetMode: AuthMode) => {
     event.preventDefault();
     setErrorMessage('');
+    const password = targetMode === 'login' ? loginPassword : registerPassword;
+
+    if (targetMode === 'register' && COMMON_LEAKED_PASSWORDS.has(password.trim().toLowerCase())) {
+      setErrorMessage('这个密码过于常见，建议使用“生成强密码”后再注册。');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -58,6 +103,11 @@ export function Auth() {
 
       storeSession(response);
       notifySuccess(targetMode === 'login' ? '登录成功' : '注册成功', {
+        description: targetMode === 'register'
+          ? response.verification_email_sent
+            ? '验证邮件已发送，请检查邮箱。'
+            : '账号已创建；当前邮件服务未启用，可稍后在账号内重发验证邮件。'
+          : undefined,
         context: {
           module: 'auth',
           action: targetMode
@@ -79,6 +129,12 @@ export function Auth() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const generatePassword = () => {
+    setRegisterPassword(createStrongPassword());
+    setShowPassword(true);
+    setErrorMessage('');
   };
 
   const debugLogin = async () => {
@@ -186,6 +242,7 @@ export function Auth() {
                 onSubmit={(event) => submit(event, 'login')}
                 className="min-w-full space-y-4 pr-0"
                 aria-hidden={isRegister}
+                autoComplete="on"
               >
                 <div className="space-y-2">
                   <Label htmlFor="username" className="text-slate-300">
@@ -195,10 +252,12 @@ export function Auth() {
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input
                       id="username"
+                      name="username"
                       value={username}
                       onChange={(event) => setUsername(event.target.value)}
                       placeholder="用户名或邮箱"
                       className="pl-10 bg-[#0F0F1A] border-slate-700 text-slate-200"
+                      autoComplete="username"
                       required
                       tabIndex={isRegister ? -1 : 0}
                     />
@@ -213,11 +272,13 @@ export function Auth() {
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input
                       id="password"
+                      name="current-password"
                       type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
+                      value={loginPassword}
+                      onChange={(event) => setLoginPassword(event.target.value)}
                       placeholder="请输入密码"
                       className="pl-10 pr-10 bg-[#0F0F1A] border-slate-700 text-slate-200"
+                      autoComplete="current-password"
                       required
                       tabIndex={isRegister ? -1 : 0}
                     />
@@ -247,6 +308,7 @@ export function Auth() {
                 onSubmit={(event) => submit(event, 'register')}
                 className="min-w-full space-y-4 pl-0"
                 aria-hidden={!isRegister}
+                autoComplete="on"
               >
                 <div className="space-y-2">
                   <Label htmlFor="register-username" className="text-slate-300">
@@ -256,10 +318,12 @@ export function Auth() {
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input
                       id="register-username"
+                      name="username"
                       value={username}
                       onChange={(event) => setUsername(event.target.value)}
                       placeholder="至少 3 个字符"
                       className="pl-10 bg-[#0F0F1A] border-slate-700 text-slate-200"
+                      autoComplete="username"
                       required
                       minLength={3}
                       tabIndex={isRegister ? 0 : -1}
@@ -275,11 +339,13 @@ export function Auth() {
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input
                       id="email"
+                      name="email"
                       type="email"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
                       placeholder="you@example.com"
                       className="pl-10 bg-[#0F0F1A] border-slate-700 text-slate-200"
+                      autoComplete="email"
                       required
                       tabIndex={isRegister ? 0 : -1}
                     />
@@ -292,27 +358,42 @@ export function Auth() {
                   </Label>
                   <Input
                     id="display-name"
+                    name="nickname"
                     value={displayName}
                     onChange={(event) => setDisplayName(event.target.value)}
                     placeholder="可选"
                     className="bg-[#0F0F1A] border-slate-700 text-slate-200"
+                    autoComplete="nickname"
                     tabIndex={isRegister ? 0 : -1}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="register-password" className="text-slate-300">
-                    密码
-                  </Label>
+                  <div className="flex items-center justify-between gap-3">
+                    <Label htmlFor="register-password" className="text-slate-300">
+                      密码
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={generatePassword}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80"
+                      tabIndex={isRegister ? 0 : -1}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      生成强密码
+                    </button>
+                  </div>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input
                       id="register-password"
+                      name="new-password"
                       type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
+                      value={registerPassword}
+                      onChange={(event) => setRegisterPassword(event.target.value)}
                       placeholder="至少 6 个字符"
                       className="pl-10 pr-10 bg-[#0F0F1A] border-slate-700 text-slate-200"
+                      autoComplete="new-password"
                       required
                       minLength={6}
                       tabIndex={isRegister ? 0 : -1}

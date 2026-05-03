@@ -28,6 +28,7 @@ class User(Base):
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
     last_login = Column(DateTime, nullable=True)
+    email_verified_at = Column(DateTime, nullable=True)
     
     # 关系
     plugins = relationship("Plugin", back_populates="author")
@@ -65,7 +66,11 @@ class User(Base):
     def has_all_permissions(self, permission_codes):
         """检查用户是否拥有所有权限"""
         return all(self.has_permission(code) for code in permission_codes)
-    
+
+    @property
+    def is_email_verified(self) -> bool:
+        return self.email_verified_at is not None
+
     def get_all_permissions(self):
         """获取用户的所有权限代码"""
         if self.is_admin:

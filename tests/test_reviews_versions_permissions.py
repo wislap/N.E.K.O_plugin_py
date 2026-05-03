@@ -3,9 +3,10 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Plugin, Review
+from app.models import Plugin, Review, Version
 from app.services.notification_service import NotificationService
 from app.services.plugin_service import PluginService
+from app.services.version_service import VersionService
 from tests.conftest import create_test_user
 
 
@@ -248,3 +249,40 @@ async def test_versions_require_plugin_owner_or_admin(
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert admin_delete.status_code == 200
+
+
+async def test_version_create_rolls_back_when_plugin_sync_fails(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    await create_test_user(db_session, "atomic_version_owner", "atomic-version-owner@example.com")
+
+    owner_token = await login(client, "atomic_version_owner")
+    plugin = await create_plugin(client, owner_token, "atomic-version-create")
+
+    def fail_sync(*args, **kwargs):
+        raise RuntimeError("version sync boom")
+
+    monkeypatch.setattr(VersionService, "_sync_plugin_current_version", fail_sync)
+
+    with pytest.raises(RuntimeError, match="version sync boom"):
+        await client.post(
+            f"/api/v1/plugins/{plugin['id']}/versions",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={
+                "version": "2.0.0",
+                "changelog": "Should rollback",
+                "download_url": "https://example.com/rollback.zip",
+            },
+        )
+
+    assert await db_session.scalar(
+        select(Version.id).where(
+            Version.plugin_id == plugin["id"],
+            Version.version == "2.0.0",
+        )
+    ) is None
+    db_plugin = await db_session.get(Plugin, plugin["id"])
+    assert db_plugin is not None
+    assert db_plugin.version == "1.0.0"

@@ -23,6 +23,12 @@ class BootstrapService:
             )
             await db.commit()
 
+        if "email_verified_at" not in columns:
+            await db.execute(
+                text("ALTER TABLE users ADD COLUMN email_verified_at DATETIME")
+            )
+            await db.commit()
+
     @staticmethod
     async def ensure_initial_admin(db: AsyncSession) -> None:
         result = await db.execute(

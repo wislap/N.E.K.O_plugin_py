@@ -2,7 +2,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from typing import Optional, List
 
+from app.models.plugin import Plugin
 from app.models.version import Version
+from app.services.transactions import commit_or_rollback
 
 
 class VersionService:
@@ -53,28 +55,38 @@ class VersionService:
         changelog: Optional[str] = None,
         download_url: Optional[str] = None,
         min_app_version: Optional[str] = None,
-        max_app_version: Optional[str] = None
+        max_app_version: Optional[str] = None,
+        plugin: Optional[Plugin] = None
     ) -> Version:
         """创建新版本"""
-        new_version = Version(
-            plugin_id=plugin_id,
-            version=version,
-            changelog=changelog,
-            download_url=download_url,
-            min_app_version=min_app_version,
-            max_app_version=max_app_version
-        )
-        
-        db.add(new_version)
-        await db.commit()
+        async with commit_or_rollback(db):
+            new_version = Version(
+                plugin_id=plugin_id,
+                version=version,
+                changelog=changelog,
+                download_url=download_url,
+                min_app_version=min_app_version,
+                max_app_version=max_app_version
+            )
+
+            db.add(new_version)
+            await db.flush()
+
+            if plugin is not None:
+                VersionService._sync_plugin_current_version(plugin, version)
+
         await db.refresh(new_version)
         return new_version
+
+    @staticmethod
+    def _sync_plugin_current_version(plugin: Plugin, version: str) -> None:
+        plugin.version = version
     
     @staticmethod
     async def delete_version(db: AsyncSession, version: Version) -> None:
         """删除版本"""
-        await db.delete(version)
-        await db.commit()
+        async with commit_or_rollback(db):
+            await db.delete(version)
     
     @staticmethod
     async def version_exists(

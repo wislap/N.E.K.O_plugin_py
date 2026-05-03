@@ -11,6 +11,7 @@ import { Plugins } from '@/pages/Plugins';
 import { PluginDetail } from '@/pages/PluginDetail';
 import { Upload } from '@/pages/Upload';
 import { Auth } from '@/pages/Auth';
+import { VerifyEmail } from '@/pages/VerifyEmail';
 import { MyPlugins } from '@/pages/MyPlugins';
 import AdminLayout from '@/pages/admin/AdminLayout';
 import AdminLogin from '@/pages/admin/Login';
@@ -63,6 +64,7 @@ function MainLayout() {
           <Route path="/my/plugins" element={<PageTransition><MyPlugins /></PageTransition>} />
           <Route path="/login" element={<PageTransition><Auth /></PageTransition>} />
           <Route path="/register" element={<PageTransition><Auth /></PageTransition>} />
+          <Route path="/verify-email" element={<PageTransition><VerifyEmail /></PageTransition>} />
         </Routes>
       </AnimatePresence>
       <Footer />

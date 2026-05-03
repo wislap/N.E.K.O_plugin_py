@@ -275,6 +275,55 @@ N.E.K.O 插件市场 - 审核通知
         """
         
         return await self._send_email(to_email, subject, html_content, text_content)
+
+    async def send_email_verification(
+        self,
+        to_email: str,
+        username: str,
+        verification_url: str,
+        expires_minutes: int
+    ) -> bool:
+        subject = "验证你的 N.E.K.O 插件市场邮箱"
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #e5e7eb; background: #0f0f1a; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 24px; }}
+                .panel {{ background: #1a1a2e; border: 1px solid #334155; border-radius: 12px; padding: 28px; }}
+                .button {{ display: inline-block; background: #8b5cf6; color: white; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; }}
+                .muted {{ color: #94a3b8; font-size: 13px; }}
+                .link {{ word-break: break-all; color: #c4b5fd; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="panel">
+                    <h1>N.E.K.O 邮箱验证</h1>
+                    <p>你好，{username}。</p>
+                    <p>点击下面的按钮完成邮箱验证，验证后可以更完整地使用插件提交、通知和账号安全功能。</p>
+                    <p><a class="button" href="{verification_url}">验证邮箱</a></p>
+                    <p class="muted">链接将在 {expires_minutes} 分钟后过期。如果按钮无法打开，请复制下面的链接到浏览器：</p>
+                    <p class="link">{verification_url}</p>
+                    <p class="muted">如果不是你发起的注册，请忽略这封邮件。</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        text_content = f"""
+N.E.K.O 邮箱验证
+
+你好，{username}。
+
+请打开下面的链接完成邮箱验证，链接将在 {expires_minutes} 分钟后过期：
+{verification_url}
+
+如果不是你发起的注册，请忽略这封邮件。
+        """
+        return await self._send_email(to_email, subject, html_content, text_content)
     
     async def send_manual_review_notification(
         self,

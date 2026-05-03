@@ -11,6 +11,8 @@ from app.core.security import (
     get_password_hash
 )
 from app.schemas.user import UserCreate
+from app.services.email_verification_service import email_verification_service
+from app.services.transactions import commit_or_rollback
 
 
 class AuthService:
@@ -45,7 +47,7 @@ class AuthService:
     async def register_user(
         db: AsyncSession, 
         user_data: UserCreate
-    ) -> Tuple[User, str, str]:
+    ) -> Tuple[User, str, str, bool]:
         """注册用户并返回令牌"""
         # 检查用户名是否已存在
         result = await db.execute(
@@ -61,25 +63,36 @@ class AuthService:
         if result.scalar_one_or_none():
             raise ValueError("邮箱已存在")
         
-        # 创建用户
-        user = User(
-            username=user_data.username,
-            email=user_data.email,
-            hashed_password=get_password_hash(user_data.password),
-            display_name=user_data.display_name
-        )
-        
-        db.add(user)
-        await db.flush()
-        
-        # 生成令牌
-        access_token = create_access_token(data={"sub": str(user.id)})
-        refresh_token = create_refresh_token(data={"sub": str(user.id)})
-        
-        await db.commit()
+        async with commit_or_rollback(db):
+            # 创建用户
+            user = User(
+                username=user_data.username,
+                email=user_data.email,
+                hashed_password=get_password_hash(user_data.password),
+                display_name=user_data.display_name
+            )
+
+            db.add(user)
+            await db.flush()
+            _token, raw_verification_token = await email_verification_service.issue_for_user(
+                db,
+                user,
+                commit=False,
+            )
+
+            # 生成令牌
+            access_token = create_access_token(data={"sub": str(user.id)})
+            refresh_token = create_refresh_token(data={"sub": str(user.id)})
+
         await db.refresh(user)
-        
-        return user, access_token, refresh_token
+
+        verification_email_sent = await email_verification_service.send_verification_email(
+            db,
+            user,
+            raw_verification_token,
+        )
+
+        return user, access_token, refresh_token, verification_email_sent
     
     @staticmethod
     async def login_user(

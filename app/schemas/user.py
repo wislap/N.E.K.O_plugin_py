@@ -44,6 +44,8 @@ class User(UserBase):
     is_active: bool
     is_admin: bool
     must_change_password: bool
+    email_verified_at: Optional[datetime] = None
+    is_email_verified: bool = False
     created_at: datetime
     updated_at: datetime
     last_login: Optional[datetime]

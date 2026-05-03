@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    FRONTEND_BASE_URL: str = "http://127.0.0.1:5173"
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = 30
+    EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: int = 60
 
     # Debug auth. Development only; keep disabled in production.
     DEBUG_AUTH_ENABLED: bool = False
