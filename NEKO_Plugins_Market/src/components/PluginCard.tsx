@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Download, ThumbsUp, Github, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +20,7 @@ const ratingColors: Record<string, string> = {
 };
 
 export function PluginCard({ plugin }: PluginCardProps) {
+  const navigate = useNavigate();
   const zone = getZoneById(plugin.zone);
 
   const formatDownloads = (num: number): string => {
@@ -39,9 +40,17 @@ export function PluginCard({ plugin }: PluginCardProps) {
       whileTap={{ scale: 0.985 }}
       className="h-full"
     >
-      <Link
-        to={`/plugin/${plugin.id}`}
-        className="group block h-full bg-[#1A1A2E] border border-slate-800/50 rounded-xl p-5 hover:border-primary/30 hover:shadow-[0_0_20px_oklch(var(--primary)/0.15)] transition-all duration-300"
+      <article
+        role="link"
+        tabIndex={0}
+        onClick={() => navigate(`/plugin/${plugin.id}`)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            navigate(`/plugin/${plugin.id}`);
+          }
+        }}
+        className="group block h-full cursor-pointer bg-[#1A1A2E] border border-slate-800/50 rounded-xl p-5 hover:border-primary/30 hover:shadow-[0_0_20px_oklch(var(--primary)/0.15)] transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
         {/* Header */}
         <div className="flex items-start justify-between mb-3">
@@ -174,7 +183,7 @@ export function PluginCard({ plugin }: PluginCardProps) {
             <span className="text-sm">仓库</span>
           </a>
         </div>
-      </Link>
+      </article>
     </motion.div>
   );
 }

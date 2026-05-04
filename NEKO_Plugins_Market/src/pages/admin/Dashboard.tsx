@@ -18,10 +18,15 @@ import {
   type UserPermissions
 } from "@/services/adminApi";
 import { adminModules } from "@/lib/adminModules";
+import type { AdminModule } from "@/lib/adminModules";
 import { reportError } from "@/lib/error-reporting";
 
+function flattenModules(modules: AdminModule[]): AdminModule[] {
+  return modules.flatMap((module) => [module, ...(module.children ? flattenModules(module.children) : [])]);
+}
+
 const adminModuleByKey = Object.fromEntries(
-  adminModules.map((module) => [module.key, module])
+  flattenModules(adminModules).map((module) => [module.key, module])
 );
 
 export default function AdminDashboard() {
@@ -110,8 +115,8 @@ export default function AdminDashboard() {
 
   const quickActions = [
     {
-      title: adminModuleByKey.plugins.label,
-      href: adminModuleByKey.plugins.path,
+      title: adminModuleByKey.pluginReview.label,
+      href: adminModuleByKey.reviewWorkspace.path,
       value: `${stats.pendingPlugins} 个待审`,
       icon: Clock,
       color: "text-yellow-500",

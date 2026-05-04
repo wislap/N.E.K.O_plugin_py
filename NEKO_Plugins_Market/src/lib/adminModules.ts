@@ -4,11 +4,22 @@ export interface AdminModule {
   path: string;
   permission?: string;
   visible?: boolean;
+  children?: AdminModule[];
 }
 
 export const adminModules: AdminModule[] = [
   { key: "dashboard", label: "仪表盘", path: "/admin" },
-  { key: "plugins", label: "插件审核", path: "/admin/plugins", permission: "plugin:review" },
+  {
+    key: "pluginReview",
+    label: "插件审核",
+    path: "/admin/review/workspace",
+    permission: "plugin:review",
+    children: [
+      { key: "reviewOverview", label: "总览", path: "/admin/review/overview", permission: "plugin:review" },
+      { key: "reviewWorkspace", label: "工作区", path: "/admin/review/workspace", permission: "plugin:review" },
+      { key: "reviewArchive", label: "归档", path: "/admin/review/archive", permission: "plugin:review" }
+    ]
+  },
   { key: "users", label: "用户管理", path: "/admin/users", permission: "system:user" },
   { key: "permissions", label: "权限管理", path: "/admin/permissions", permission: "system:permission" },
   { key: "smtp", label: "SMTP设置", path: "/admin/smtp", permission: "system:smtp" },

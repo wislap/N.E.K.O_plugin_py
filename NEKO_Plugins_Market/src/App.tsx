@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
@@ -17,6 +17,8 @@ import AdminLayout from '@/pages/admin/AdminLayout';
 import AdminLogin from '@/pages/admin/Login';
 import AdminDashboard from '@/pages/admin/Dashboard';
 import AdminPlugins from '@/pages/admin/Plugins';
+import ReviewOverview from '@/pages/admin/ReviewOverview';
+import ReviewArchive from '@/pages/admin/ReviewArchive';
 import AdminUsers from '@/pages/admin/Users';
 import AdminPermissions from '@/pages/admin/Permissions';
 import AdminSMTP from '@/pages/admin/SMTP';
@@ -27,30 +29,32 @@ import AdminCategories from '@/pages/admin/Categories';
 import AdminZones from '@/pages/admin/Zones';
 import AdminSignatures from '@/pages/admin/Signatures';
 
-function MainLayout() {
-  const location = useLocation();
-  const isAdminRoute = location.pathname.startsWith('/admin');
+function AdminRoutes() {
+  return (
+    <Routes>
+      <Route path="/admin/login" element={<AdminLogin />} />
+      <Route path="/admin/*" element={<AdminLayout />}>
+        <Route index element={<AdminDashboard />} />
+        <Route path="plugins" element={<Navigate to="/admin/review/workspace" replace />} />
+        <Route path="review/overview" element={<ReviewOverview />} />
+        <Route path="review/workspace" element={<AdminPlugins />} />
+        <Route path="review/archive" element={<ReviewArchive />} />
+        <Route path="users" element={<AdminUsers />} />
+        <Route path="permissions" element={<AdminPermissions />} />
+        <Route path="smtp" element={<AdminSMTP />} />
+        <Route path="settings" element={<AdminSettings />} />
+        <Route path="logs" element={<AdminLogs />} />
+        <Route path="categories" element={<AdminCategories />} />
+        <Route path="zones" element={<AdminZones />} />
+        <Route path="signatures" element={<AdminSignatures />} />
+        <Route path="change-password" element={<AdminChangePassword />} />
+      </Route>
+    </Routes>
+  );
+}
 
-  if (isAdminRoute) {
-    return (
-      <Routes>
-        <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin/*" element={<AdminLayout />}>
-          <Route index element={<AdminDashboard />} />
-          <Route path="plugins" element={<AdminPlugins />} />
-          <Route path="users" element={<AdminUsers />} />
-          <Route path="permissions" element={<AdminPermissions />} />
-          <Route path="smtp" element={<AdminSMTP />} />
-          <Route path="settings" element={<AdminSettings />} />
-          <Route path="logs" element={<AdminLogs />} />
-          <Route path="categories" element={<AdminCategories />} />
-          <Route path="zones" element={<AdminZones />} />
-          <Route path="signatures" element={<AdminSignatures />} />
-          <Route path="change-password" element={<AdminChangePassword />} />
-        </Route>
-      </Routes>
-    );
-  }
+function PublicRoutes() {
+  const location = useLocation();
 
   return (
     <>
@@ -70,6 +74,13 @@ function MainLayout() {
       <Footer />
     </>
   );
+}
+
+function MainLayout() {
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith('/admin');
+
+  return isAdminRoute ? <AdminRoutes /> : <PublicRoutes />;
 }
 
 function App() {

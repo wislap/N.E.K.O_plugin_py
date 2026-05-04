@@ -1,4 +1,5 @@
 import { adminModules } from "@/lib/adminModules";
+import type { AdminModule } from "@/lib/adminModules";
 import { request } from "@/services/http/client";
 import type { UserPermissions } from "./types";
 
@@ -16,6 +17,10 @@ export function canAccessAdminPermission(permissionState: UserPermissions | null
   return !permission || permissionState.permissions.includes(permission);
 }
 
+function flattenModules(modules: AdminModule[]): AdminModule[] {
+  return modules.flatMap((module) => [module, ...(module.children ? flattenModules(module.children) : [])]);
+}
+
 export function hasAnyAdminAccess(permissionState: UserPermissions | null) {
   if (!permissionState) {
     return false;
@@ -23,7 +28,7 @@ export function hasAnyAdminAccess(permissionState: UserPermissions | null) {
   if (permissionState.is_admin || permissionState.permissions.includes("*")) {
     return true;
   }
-  return adminModules.some((module) => (
+  return flattenModules(adminModules).some((module) => (
     typeof module.permission === "string"
       && permissionState.permissions.includes(module.permission)
   ));
