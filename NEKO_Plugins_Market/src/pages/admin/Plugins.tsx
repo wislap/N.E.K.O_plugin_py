@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle,
   XCircle,
@@ -47,6 +47,127 @@ interface ReviewData {
   comment: string;
 }
 
+interface HoldReviewButtonProps {
+  actionLabel: string;
+  holdLabel: string;
+  icon: React.ReactNode;
+  variant?: "default" | "outline";
+  tone?: "approve" | "reject";
+  disabled?: boolean;
+  onConfirm: () => void;
+}
+
+const HOLD_CONFIRM_MS = 500;
+
+function HoldReviewButton({
+  actionLabel,
+  holdLabel,
+  icon,
+  variant = "default",
+  tone = "approve",
+  disabled = false,
+  onConfirm
+}: HoldReviewButtonProps) {
+  const [progress, setProgress] = useState(0);
+  const [isHolding, setIsHolding] = useState(false);
+  const startedAtRef = useRef<number | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const completedRef = useRef(false);
+
+  const clearHold = () => {
+    if (frameRef.current !== null) {
+      window.cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    startedAtRef.current = null;
+    completedRef.current = false;
+    setIsHolding(false);
+    setProgress(0);
+  };
+
+  const tick = (now: number) => {
+    if (startedAtRef.current === null) {
+      return;
+    }
+
+    const nextProgress = Math.min((now - startedAtRef.current) / HOLD_CONFIRM_MS, 1);
+    setProgress(nextProgress);
+
+    if (nextProgress >= 1) {
+      completedRef.current = true;
+      onConfirm();
+      clearHold();
+      return;
+    }
+
+    frameRef.current = window.requestAnimationFrame(tick);
+  };
+
+  const startHold = () => {
+    if (disabled || isHolding) {
+      return;
+    }
+    completedRef.current = false;
+    startedAtRef.current = performance.now();
+    setIsHolding(true);
+    setProgress(0);
+    frameRef.current = window.requestAnimationFrame(tick);
+  };
+
+  useEffect(() => clearHold, []);
+
+  const progressClass = tone === "reject"
+    ? "bg-red-600"
+    : "bg-emerald-500";
+  const idleProgressClass = tone === "reject" ? "bg-red-500/20" : "bg-emerald-500/20";
+  const activeClass = tone === "reject"
+    ? "border-red-400 shadow-[0_0_0_3px_rgba(248,113,113,0.28),0_0_18px_rgba(220,38,38,0.35)] text-white"
+    : "border-emerald-300 shadow-[0_0_0_3px_rgba(110,231,183,0.28),0_0_18px_rgba(16,185,129,0.35)] text-white";
+
+  return (
+    <Button
+      type="button"
+      variant={variant}
+      disabled={disabled}
+      aria-label={`按住 0.5 秒${actionLabel}`}
+      title={`按住 0.5 秒${actionLabel}`}
+      className={`relative min-w-28 overflow-hidden select-none transition-[border-color,box-shadow] duration-150 ${
+        isHolding ? activeClass : ""
+      }`}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        startHold();
+      }}
+      onPointerUp={clearHold}
+      onPointerCancel={clearHold}
+      onPointerLeave={clearHold}
+      onClick={(event) => event.preventDefault()}
+    >
+      <span
+        aria-hidden="true"
+        className={`absolute inset-y-0 left-0 opacity-95 transition-[width] duration-75 ease-linear ${
+          isHolding ? progressClass : idleProgressClass
+        }`}
+        style={{ width: `${progress * 100}%` }}
+      />
+      {isHolding && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 bg-white/10"
+          style={{ clipPath: `inset(0 ${Math.max(0, 100 - progress * 100)}% 0 0)` }}
+        />
+      )}
+      <span className={`relative z-10 inline-flex items-center ${
+        isHolding ? "text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]" : ""
+      }`}>
+        {icon}
+        {isHolding ? holdLabel : actionLabel}
+      </span>
+    </Button>
+  );
+}
+
 export default function AdminPlugins() {
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,6 +176,7 @@ export default function AdminPlugins() {
   const [selectedPlugin, setSelectedPlugin] = useState<Plugin | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [isReviewSubmitting, setIsReviewSubmitting] = useState(false);
   const [reviewData, setReviewData] = useState<ReviewData>({
     comment: ""
   });
@@ -81,6 +203,7 @@ export default function AdminPlugins() {
 
   const handleApprove = async (pluginId: number) => {
     try {
+      setIsReviewSubmitting(true);
       await adminApi.approvePlugin(pluginId, reviewData.comment);
       fetchPlugins();
       setIsReviewOpen(false);
@@ -91,11 +214,14 @@ export default function AdminPlugins() {
         userMessage: "插件审核通过操作失败，请检查权限或后端日志。",
         context: { module: "admin.plugins", action: "approvePlugin", pluginId }
       });
+    } finally {
+      setIsReviewSubmitting(false);
     }
   };
 
   const handleReject = async (pluginId: number) => {
     try {
+      setIsReviewSubmitting(true);
       await adminApi.rejectPlugin(pluginId, reviewData.comment);
       fetchPlugins();
       setIsReviewOpen(false);
@@ -106,6 +232,8 @@ export default function AdminPlugins() {
         userMessage: "插件审核拒绝操作失败，请检查权限或后端日志。",
         context: { module: "admin.plugins", action: "rejectPlugin", pluginId }
       });
+    } finally {
+      setIsReviewSubmitting(false);
     }
   };
 
@@ -379,17 +507,26 @@ export default function AdminPlugins() {
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button
+            <p className="mr-auto self-center text-xs text-muted-foreground">
+              按住按钮 0.5 秒后执行审核操作
+            </p>
+            <HoldReviewButton
+              actionLabel="拒绝"
+              holdLabel="按住拒绝..."
               variant="outline"
-              onClick={() => selectedPlugin && handleReject(selectedPlugin.id)}
-            >
-              <XCircle className="h-4 w-4 mr-1" />
-              拒绝
-            </Button>
-            <Button onClick={() => selectedPlugin && handleApprove(selectedPlugin.id)}>
-              <CheckCircle className="h-4 w-4 mr-1" />
-              通过
-            </Button>
+              tone="reject"
+              icon={<XCircle className="h-4 w-4 mr-1" />}
+              disabled={!selectedPlugin || isReviewSubmitting}
+              onConfirm={() => selectedPlugin && handleReject(selectedPlugin.id)}
+            />
+            <HoldReviewButton
+              actionLabel="通过"
+              holdLabel="按住通过..."
+              tone="approve"
+              icon={<CheckCircle className="h-4 w-4 mr-1" />}
+              disabled={!selectedPlugin || isReviewSubmitting}
+              onConfirm={() => selectedPlugin && handleApprove(selectedPlugin.id)}
+            />
           </DialogFooter>
         </DialogContent>
       </Dialog>

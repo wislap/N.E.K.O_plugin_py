@@ -17,5 +17,14 @@ export function canAccessAdminPermission(permissionState: UserPermissions | null
 }
 
 export function hasAnyAdminAccess(permissionState: UserPermissions | null) {
-  return adminModules.some((module) => canAccessAdminPermission(permissionState, module.permission));
+  if (!permissionState) {
+    return false;
+  }
+  if (permissionState.is_admin || permissionState.permissions.includes("*")) {
+    return true;
+  }
+  return adminModules.some((module) => (
+    typeof module.permission === "string"
+      && permissionState.permissions.includes(module.permission)
+  ));
 }

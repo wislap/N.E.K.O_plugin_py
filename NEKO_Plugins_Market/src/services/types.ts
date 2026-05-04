@@ -169,6 +169,53 @@ export interface PluginCreateRequest {
   tags?: string[];
 }
 
+export type VerificationStatus = "unverified" | "pending" | "passed" | "failed";
+
+export interface PluginVersion {
+  id: number;
+  plugin_id: number;
+  version: string;
+  changelog?: string | null;
+  download_url?: string | null;
+  min_app_version?: string | null;
+  max_app_version?: string | null;
+  source_repo_url?: string | null;
+  source_commit?: string | null;
+  release_tag?: string | null;
+  release_url?: string | null;
+  actions_run_url?: string | null;
+  package_url?: string | null;
+  package_sha256?: string | null;
+  payload_hash?: string | null;
+  neko_repo?: string | null;
+  neko_ref?: string | null;
+  neko_commit?: string | null;
+  verification_status: VerificationStatus | string;
+  verification_summary?: string | null;
+  created_at: string;
+}
+
+export interface PluginVersionCreateRequest {
+  version: string;
+  changelog?: string;
+  download_url?: string;
+  min_app_version?: string;
+  max_app_version?: string;
+  source_repo_url?: string;
+  source_commit?: string;
+  release_tag?: string;
+  release_url?: string;
+  actions_run_url?: string;
+  package_url?: string;
+  package_sha256?: string;
+  payload_hash?: string;
+  neko_repo?: string;
+  neko_ref?: string;
+  neko_commit?: string;
+  verification_status?: VerificationStatus;
+  verification_summary?: string;
+}
+
 export interface ReviewCreateRequest {
   rating: number;
   title?: string;

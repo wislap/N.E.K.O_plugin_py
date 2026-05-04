@@ -8,6 +8,7 @@ from app.core.security import (
     verify_password, 
     create_access_token, 
     create_refresh_token,
+    decode_token_with_key_rotation,
     get_password_hash
 )
 from app.schemas.user import UserCreate
@@ -114,11 +115,9 @@ class AuthService:
         return user, access_token, refresh_token
     
     @staticmethod
-    def refresh_access_token(refresh_token: str) -> str:
+    async def refresh_access_token(db: AsyncSession, refresh_token: str) -> str:
         """使用刷新令牌获取新的访问令牌"""
-        from app.core.security import decode_token
-        
-        payload = decode_token(refresh_token)
+        payload = await decode_token_with_key_rotation(refresh_token, db)
         if not payload:
             raise ValueError("无效的刷新令牌")
         
@@ -128,6 +127,11 @@ class AuthService:
         user_id = payload.get("sub")
         if not user_id:
             raise ValueError("无效的令牌")
+
+        result = await db.execute(select(User).where(User.id == int(user_id)))
+        user = result.scalar_one_or_none()
+        if not user or not user.is_active:
+            raise ValueError("用户不存在或已被禁用")
         
         return create_access_token(data={"sub": user_id})
 

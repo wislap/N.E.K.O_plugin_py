@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.core.security import get_current_user, get_or_create_debug_user, create_access_token, create_refresh_token
 from app.services.auth_service import AuthService
 from app.services.email_verification_service import email_verification_service
-from app.schemas.user import UserCreate, UserLogin, User, Token, PasswordChange
+from app.schemas.user import UserCreate, UserLogin, User, Token, PasswordChange, RefreshTokenRequest
 from app.schemas.common import MessageResponse
 
 router = APIRouter()
@@ -133,12 +133,19 @@ async def debug_login(
 
 
 @router.post("/auth/refresh", response_model=Token)
-async def refresh_token(refresh_token: str):
+async def refresh_token(
+    refresh_data: RefreshTokenRequest | None = Body(None),
+    refresh_token: str | None = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
     """
     刷新访问令牌
     """
     try:
-        new_access_token = AuthService.refresh_access_token(refresh_token)
+        token_value = refresh_data.refresh_token if refresh_data else refresh_token
+        if not token_value:
+            raise ValueError("缺少刷新令牌")
+        new_access_token = await AuthService.refresh_access_token(db, token_value)
         return Token(access_token=new_access_token, token_type="bearer")
     except ValueError as e:
         raise HTTPException(

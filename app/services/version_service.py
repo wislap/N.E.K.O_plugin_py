@@ -56,6 +56,19 @@ class VersionService:
         download_url: Optional[str] = None,
         min_app_version: Optional[str] = None,
         max_app_version: Optional[str] = None,
+        source_repo_url: Optional[str] = None,
+        source_commit: Optional[str] = None,
+        release_tag: Optional[str] = None,
+        release_url: Optional[str] = None,
+        actions_run_url: Optional[str] = None,
+        package_url: Optional[str] = None,
+        package_sha256: Optional[str] = None,
+        payload_hash: Optional[str] = None,
+        neko_repo: Optional[str] = None,
+        neko_ref: Optional[str] = None,
+        neko_commit: Optional[str] = None,
+        verification_status: str = "unverified",
+        verification_summary: Optional[str] = None,
         plugin: Optional[Plugin] = None
     ) -> Version:
         """创建新版本"""
@@ -66,7 +79,20 @@ class VersionService:
                 changelog=changelog,
                 download_url=download_url,
                 min_app_version=min_app_version,
-                max_app_version=max_app_version
+                max_app_version=max_app_version,
+                source_repo_url=source_repo_url,
+                source_commit=source_commit,
+                release_tag=release_tag,
+                release_url=release_url,
+                actions_run_url=actions_run_url,
+                package_url=package_url,
+                package_sha256=package_sha256.lower() if package_sha256 else None,
+                payload_hash=payload_hash.lower() if payload_hash else None,
+                neko_repo=neko_repo,
+                neko_ref=neko_ref,
+                neko_commit=neko_commit,
+                verification_status=verification_status,
+                verification_summary=verification_summary,
             )
 
             db.add(new_version)

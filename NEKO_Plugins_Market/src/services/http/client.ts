@@ -13,6 +13,50 @@ function createRequestId() {
   return `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function clearSession() {
+  localStorage.removeItem("token");
+  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("currentUser");
+  window.dispatchEvent(new Event("auth:changed"));
+}
+
+async function refreshAccessToken(requestId: string) {
+  const refreshToken = localStorage.getItem("refreshToken");
+  if (!refreshToken) {
+    clearSession();
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        [REQUEST_ID_HEADER]: requestId
+      },
+      body: JSON.stringify({ refresh_token: refreshToken })
+    });
+
+    if (!response.ok) {
+      clearSession();
+      return null;
+    }
+
+    const data = await response.json() as { access_token?: string };
+    if (!data.access_token) {
+      clearSession();
+      return null;
+    }
+
+    localStorage.setItem("token", data.access_token);
+    window.dispatchEvent(new Event("auth:changed"));
+    return data.access_token;
+  } catch {
+    clearSession();
+    return null;
+  }
+}
+
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers = new Headers(options.headers);
@@ -54,6 +98,18 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   }
 
   const responseRequestId = response.headers.get(REQUEST_ID_HEADER) ?? requestId;
+
+  if (response.status === 401 && path !== "/auth/refresh" && token) {
+    const newToken = await refreshAccessToken(responseRequestId);
+    if (newToken) {
+      const retryHeaders = new Headers(headers);
+      retryHeaders.set("Authorization", `Bearer ${newToken}`);
+      response = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers: retryHeaders
+      });
+    }
+  }
 
   if (!response.ok) {
     const { message, responseBody, detail } = await parseErrorResponse(response);

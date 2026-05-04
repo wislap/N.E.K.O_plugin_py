@@ -202,8 +202,8 @@ class PluginService:
                 target_url="/admin/plugins",
             )
 
-        await db.refresh(plugin)
-        return plugin
+        created_plugin = await PluginService.get_plugin_by_id(db, plugin.id)
+        return created_plugin or plugin
     
     @staticmethod
     async def update_plugin(

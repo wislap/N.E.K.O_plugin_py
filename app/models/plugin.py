@@ -90,6 +90,8 @@ class Plugin(Base):
     @property
     def zone_slug(self):
         """获取插件分区 slug"""
+        if "zone" in inspect(self).unloaded:
+            return None
         return self.zone.slug if self.zone else None
 
     @property

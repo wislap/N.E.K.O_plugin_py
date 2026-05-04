@@ -98,6 +98,19 @@ async def create_version(
         download_url=version_data.download_url,
         min_app_version=version_data.min_app_version,
         max_app_version=version_data.max_app_version,
+        source_repo_url=version_data.source_repo_url,
+        source_commit=version_data.source_commit,
+        release_tag=version_data.release_tag,
+        release_url=version_data.release_url,
+        actions_run_url=version_data.actions_run_url,
+        package_url=version_data.package_url,
+        package_sha256=version_data.package_sha256,
+        payload_hash=version_data.payload_hash,
+        neko_repo=version_data.neko_repo,
+        neko_ref=version_data.neko_ref,
+        neko_commit=version_data.neko_commit,
+        verification_status=version_data.verification_status,
+        verification_summary=version_data.verification_summary,
         plugin=plugin
     )
 

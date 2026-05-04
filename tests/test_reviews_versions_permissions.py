@@ -251,6 +251,75 @@ async def test_versions_require_plugin_owner_or_admin(
     assert admin_delete.status_code == 200
 
 
+async def test_version_can_store_trusted_release_provenance(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    await create_test_user(db_session, "trusted_owner", "trusted-version-owner@example.com")
+
+    owner_token = await login(client, "trusted_owner")
+    plugin = await create_plugin(client, owner_token, "trusted-release")
+    package_hash = "A" * 64
+    payload_hash = "b" * 64
+
+    response = await client.post(
+        f"/api/v1/plugins/{plugin['id']}/versions",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={
+            "version": "1.2.0",
+            "changelog": "Release checked by GitHub Actions",
+            "download_url": "https://github.com/example/lifekit/releases/download/v1.2.0/lifekit.neko-plugin",
+            "source_repo_url": "https://github.com/example/lifekit",
+            "source_commit": "1" * 40,
+            "release_tag": "v1.2.0",
+            "release_url": "https://github.com/example/lifekit/releases/tag/v1.2.0",
+            "actions_run_url": "https://github.com/example/lifekit/actions/runs/123",
+            "package_url": "https://github.com/example/lifekit/releases/download/v1.2.0/lifekit.neko-plugin",
+            "package_sha256": package_hash,
+            "payload_hash": payload_hash,
+            "neko_repo": "Project-N-E-K-O/N.E.K.O",
+            "neko_ref": "main",
+            "neko_commit": "2" * 40,
+            "verification_status": "passed",
+            "verification_summary": "release-check passed",
+        },
+    )
+
+    assert response.status_code == 201
+    version = response.json()
+    assert version["verification_status"] == "passed"
+    assert version["source_repo_url"] == "https://github.com/example/lifekit"
+    assert version["actions_run_url"].endswith("/123")
+    assert version["package_sha256"] == package_hash.lower()
+    assert version["payload_hash"] == payload_hash
+
+    latest = await client.get(f"/api/v1/plugins/{plugin['id']}/versions/latest")
+    assert latest.status_code == 200
+    assert latest.json()["release_tag"] == "v1.2.0"
+
+
+async def test_version_rejects_invalid_package_sha256(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    await create_test_user(db_session, "bad_hash_owner", "bad-hash-owner@example.com")
+
+    owner_token = await login(client, "bad_hash_owner")
+    plugin = await create_plugin(client, owner_token, "bad-hash-release")
+
+    response = await client.post(
+        f"/api/v1/plugins/{plugin['id']}/versions",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={
+            "version": "1.2.0",
+            "package_sha256": "not-a-sha256",
+            "verification_status": "passed",
+        },
+    )
+
+    assert response.status_code == 422
+
+
 async def test_version_create_rolls_back_when_plugin_sync_fails(
     client: AsyncClient,
     db_session: AsyncSession,

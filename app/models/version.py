@@ -15,6 +15,21 @@ class Version(Base):
     version = Column(String(20), nullable=False)
     changelog = Column(Text, nullable=True)
     download_url = Column(String(500), nullable=True)
+
+    # 可信发布记录
+    source_repo_url = Column(String(500), nullable=True)
+    source_commit = Column(String(64), nullable=True)
+    release_tag = Column(String(100), nullable=True)
+    release_url = Column(String(500), nullable=True)
+    actions_run_url = Column(String(500), nullable=True)
+    package_url = Column(String(500), nullable=True)
+    package_sha256 = Column(String(64), nullable=True)
+    payload_hash = Column(String(64), nullable=True)
+    neko_repo = Column(String(200), nullable=True)
+    neko_ref = Column(String(100), nullable=True)
+    neko_commit = Column(String(64), nullable=True)
+    verification_status = Column(String(20), nullable=False, default="unverified")
+    verification_summary = Column(Text, nullable=True)
     
     # 兼容性
     min_app_version = Column(String(20), nullable=True)
