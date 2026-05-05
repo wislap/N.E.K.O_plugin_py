@@ -31,6 +31,53 @@ export interface PluginSubmissionSnapshot {
   created_at: string;
 }
 
+export interface SubmissionReviewCounts {
+  critical: number;
+  major: number;
+  minor: number;
+  nitpick: number;
+  unresolved: number;
+}
+
+export interface SubmissionReviewComment {
+  id: number;
+  case_id: number;
+  author_id: number;
+  severity: "critical" | "major" | "minor" | "nitpick";
+  target_area: "ownership" | "metadata" | "code" | "security" | "packaging" | "license" | "docs" | "release" | "other";
+  target_ref?: string | null;
+  body: string;
+  is_resolved: boolean;
+  resolved_by?: number | null;
+  resolved_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubmissionReviewCase {
+  id: number;
+  submission_id: number;
+  snapshot_id: number;
+  status: "open" | "closed";
+  decision?: PluginSubmission["decision"];
+  opened_by?: number | null;
+  closed_by?: number | null;
+  decision_summary?: string | null;
+  opened_at: string;
+  closed_at?: string | null;
+  comments: SubmissionReviewComment[];
+}
+
+export interface SubmissionReviewEvent {
+  id: number;
+  submission_id: number;
+  case_id?: number | null;
+  actor_id?: number | null;
+  event_type: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface PluginSubmission {
   id: number;
   plugin_id?: number | null;
@@ -40,10 +87,18 @@ export interface PluginSubmission {
   current_snapshot_id?: number | null;
   current_review_case_id?: number | null;
   current_snapshot?: PluginSubmissionSnapshot | null;
+  current_review_case?: SubmissionReviewCase | null;
+  review_counts: SubmissionReviewCounts;
   created_at: string;
   updated_at: string;
   submitted_at?: string | null;
   closed_at?: string | null;
+}
+
+export interface PluginSubmissionDetail extends PluginSubmission {
+  snapshots: PluginSubmissionSnapshot[];
+  review_cases: SubmissionReviewCase[];
+  events: SubmissionReviewEvent[];
 }
 
 export const submissionsApi = {
@@ -57,6 +112,10 @@ export const submissionsApi = {
 
   mine() {
     return request<PaginatedResponse<PluginSubmission>>("/review/submissions/mine?page_size=100");
+  },
+
+  detail(submissionId: number) {
+    return request<PluginSubmissionDetail>(`/review/submissions/${submissionId}`);
   },
 
   async createAndSubmit(data: SubmissionDraftCreateRequest, note?: string) {

@@ -45,8 +45,8 @@ test('root admin can change the initial password and enter the dashboard', async
 test('alice starts with an empty submission queue after fresh reset', async ({ page }) => {
   await loginFrontend(page, 'alice', 'password123');
 
-  await expect(page.getByRole('heading', { name: '我的插件' })).toBeVisible();
-  await expect(page.getByText('还没有提交插件')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的插件申请' })).toBeVisible();
+  await expect(page.getByText('还没有提交插件申请')).toBeVisible();
 });
 
 test('upload creates a review submission visible in admin workspace', async ({ page }) => {
@@ -60,9 +60,16 @@ test('upload creates a review submission visible in admin workspace', async ({ p
   await page.getByRole('combobox').click();
   await page.getByRole('option', { name: '功能区' }).click();
   await page.getByRole('button', { name: '工具' }).click();
-  await page.getByRole('button', { name: '上传插件' }).click();
+  await page.getByRole('button', { name: '提交审核申请' }).click();
 
-  await expect(page.getByText('插件上传成功！')).toBeVisible();
+  await expect(page).toHaveURL(/\/my\/plugins\?submission=\d+/);
+  await expect(page.getByRole('heading', { name: '我的插件申请' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: pluginName })).toBeVisible();
+  await expect(page.getByText('刚刚提交')).toBeVisible();
+  await page.getByRole('button', { name: '查看详情' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('heading', { name: '审核意见' })).toBeVisible();
+  await expect(page.getByRole('dialog').getByText(`https://github.com/wislap/n.e.k.o_plugin_e2e_${suffix}`)).toBeVisible();
 
   await loginAdmin(page, 'reviewer', 'password123');
   await page.goto('/#/admin/review/workspace');

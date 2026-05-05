@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Upload as UploadIcon,
+  Send,
   Github,
   Info,
   CheckCircle,
@@ -43,7 +43,6 @@ export function Upload() {
   const [selectedZone, setSelectedZone] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const slugify = (value: string) =>
@@ -55,6 +54,10 @@ export function Upload() {
       .slice(0, 100);
 
   const hasUploadAccess = isDebugAuthEnabled || Boolean(localStorage.getItem('token'));
+  const trimmedGithubUrl = githubUrl.trim();
+  const repoName = trimmedGithubUrl.match(/^https:\/\/github\.com\/[^/\s]+\/([^/\s?#]+)\/?$/i)?.[1] ?? '';
+  const isGithubRepoUrl = /^https:\/\/github\.com\/[^/\s]+\/[^/\s?#]+\/?$/i.test(trimmedGithubUrl);
+  const hasValidRepoName = repoName ? /^n\.e\.k\.o_plugin_[a-z0-9][a-z0-9_-]*$/i.test(repoName) : false;
 
   useEffect(() => {
     if (!hasUploadAccess) {
@@ -67,7 +70,9 @@ export function Upload() {
     setSelectedTags((prev) =>
       prev.includes(tag)
         ? prev.filter((t) => t !== tag)
-        : [...prev, tag]
+        : prev.length >= 5
+          ? prev
+          : [...prev, tag]
     );
   };
 
@@ -77,7 +82,7 @@ export function Upload() {
     setErrorMessage('');
 
     try {
-      await submissionsApi.createAndSubmit({
+      const submission = await submissionsApi.createAndSubmit({
         plugin_name: pluginName.trim(),
         plugin_slug: slugify(pluginName),
         description: description.trim() || undefined,
@@ -89,7 +94,7 @@ export function Upload() {
           source: 'web_upload'
         }
       }, '用户从上传页提交申请');
-      notifySuccess('插件申请已提交审核', {
+      notifySuccess('审核申请已提交', {
         context: {
           module: 'upload',
           action: 'createSubmission',
@@ -97,12 +102,12 @@ export function Upload() {
           repoUrl: githubUrl.trim()
         }
       });
-      setShowSuccess(true);
+      navigate(`/my/plugins?submission=${submission.id}`, { replace: true });
     } catch (error) {
-      const message = getErrorMessage(error, '上传失败，请稍后重试');
+      const message = getErrorMessage(error, '提交申请失败，请稍后重试');
       setErrorMessage(message);
       reportError(error, {
-        title: '上传插件失败',
+        title: '提交插件申请失败',
         context: {
           module: 'upload',
           action: 'createSubmission',
@@ -118,7 +123,8 @@ export function Upload() {
   };
 
   const isFormValid =
-    githubUrl.trim() &&
+    isGithubRepoUrl &&
+    hasValidRepoName &&
     pluginName.trim() &&
     selectedZone &&
     selectedTags.length > 0;
@@ -128,40 +134,6 @@ export function Upload() {
       <main className="min-h-screen bg-[#0F0F1A] pt-24 pb-20">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-slate-400 text-lg">正在确认登录状态...</p>
-        </div>
-      </main>
-    );
-  }
-
-  if (showSuccess) {
-    return (
-      <main className="min-h-screen bg-[#0F0F1A] pt-24 pb-20">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="bg-[#1A1A2E] border border-slate-800/50 rounded-2xl p-12">
-            <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircle className="w-10 h-10 text-green-500" />
-            </div>
-            <h1 className="text-2xl font-bold text-white mb-4">
-              插件上传成功！
-            </h1>
-            <p className="text-slate-400 mb-8">
-              你的插件已提交审核，审核通过后将上架到插件市场。
-              <br />
-              我们会通过邮件通知你审核结果。
-            </p>
-            <div className="flex items-center justify-center gap-4">
-              <Link to="/plugins">
-                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                  浏览插件
-                </Button>
-              </Link>
-              <Link to="/">
-                <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800">
-                  返回首页
-                </Button>
-              </Link>
-            </div>
-          </div>
         </div>
       </main>
     );
@@ -181,9 +153,9 @@ export function Upload() {
 
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">上传插件</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">提交插件申请</h1>
           <p className="text-slate-400">
-            将你的插件分享到 N.E.K.O. 社区
+            提交 GitHub 仓库和插件信息，进入 N.E.K.O. 插件审核队列。
           </p>
         </div>
 
@@ -192,12 +164,12 @@ export function Upload() {
           <div className="flex items-start gap-3">
             <Info className="w-5 h-5 text-blue-400 mt-0.5" />
             <div>
-              <h3 className="text-blue-400 font-medium mb-1">上传须知</h3>
+              <h3 className="text-blue-400 font-medium mb-1">提交须知</h3>
               <ul className="text-sm text-slate-400 space-y-1">
                 <li>• 插件必须托管在 GitHub 上，仓库名格式为 n.e.k.o_plugin_xxx</li>
-                <li>• 仓库需要包含 README.md 和必要的配置文件</li>
-                <li>• 插件将通过 AI 和管理员双重审核</li>
-                <li>• 审核通常需要 1-3 个工作日</li>
+                <li>• 申请会先进入待审核队列，通过后才会发布为市场插件</li>
+                <li>• 审核员会围绕代码、命名、描述、仓库可信度留下意见</li>
+                <li>• 你可以在“我的插件”里持续查看申请状态</li>
               </ul>
             </div>
           </div>
@@ -238,6 +210,16 @@ export function Upload() {
                   className="mt-2 bg-[#0F0F1A] border-slate-700 text-slate-200 placeholder:text-slate-600"
                   required
                 />
+                {trimmedGithubUrl && (!isGithubRepoUrl || !hasValidRepoName) && (
+                  <p className="mt-2 text-sm text-red-300">
+                    请输入 GitHub 仓库地址，仓库名需要符合 n.e.k.o_plugin_xxx。
+                  </p>
+                )}
+                {hasValidRepoName && (
+                  <p className="mt-2 text-sm text-green-300">
+                    仓库命名符合提交规则。
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -250,7 +232,7 @@ export function Upload() {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-white">插件信息</h3>
-                <p className="text-sm text-slate-500">插件的基本信息</p>
+                <p className="text-sm text-slate-500">这些内容会生成本次审核申请快照</p>
               </div>
             </div>
             <div className="space-y-4">
@@ -267,6 +249,11 @@ export function Upload() {
                   className="mt-2 bg-[#0F0F1A] border-slate-700 text-slate-200 placeholder:text-slate-600"
                   required
                 />
+                {pluginName.trim() && (
+                  <p className="mt-2 text-sm text-slate-500">
+                    申请 slug: {slugify(pluginName) || '-'}
+                  </p>
+                )}
               </div>
               <div>
                 <Label htmlFor="description" className="text-slate-300">
@@ -291,7 +278,7 @@ export function Upload() {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-white">分类与标签</h3>
-                <p className="text-sm text-slate-500">选择插件所属分类和标签</p>
+                <p className="text-sm text-slate-500">帮助审核员和用户理解插件用途</p>
               </div>
             </div>
             <div className="space-y-4">
@@ -319,7 +306,7 @@ export function Upload() {
               <div>
                 <Label className="text-slate-300 mb-2 block">
                   标签 <span className="text-red-500">*</span>
-                  <span className="text-slate-500 ml-1">(至少选择一个)</span>
+                  <span className="text-slate-500 ml-1">(选择 1-5 个)</span>
                 </Label>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {standardTags.map((tag) => (
@@ -337,6 +324,9 @@ export function Upload() {
                     </button>
                   ))}
                 </div>
+                <p className="mt-2 text-sm text-slate-500">
+                  已选择 {selectedTags.length}/5
+                </p>
               </div>
             </div>
           </div>
@@ -345,7 +335,7 @@ export function Upload() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-slate-500">
               <AlertCircle className="w-4 h-4" />
-              <span className="text-sm">提交即表示同意服务条款</span>
+              <span className="text-sm">提交后会创建一条可追踪的审核申请</span>
             </div>
             <Button
               type="submit"
@@ -355,12 +345,12 @@ export function Upload() {
               {isSubmitting ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                  上传中...
+                  提交中...
                 </>
               ) : (
                 <>
-                  <UploadIcon className="w-5 h-5 mr-2" />
-                  上传插件
+                  <Send className="w-5 h-5 mr-2" />
+                  提交审核申请
                 </>
               )}
             </Button>
@@ -373,24 +363,24 @@ export function Upload() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
             <h3 className="text-lg font-semibold text-white mb-4">
-              插件开发指南
+              申请前检查
             </h3>
             <ul className="space-y-2 text-slate-400">
               <li className="flex items-start gap-2">
                 <CheckCircle className="w-4 h-4 text-green-500 mt-1" />
-                <span>阅读官方插件开发文档</span>
+                <span>仓库源码公开可读</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle className="w-4 h-4 text-green-500 mt-1" />
-                <span>使用官方提供的 SDK</span>
+                <span>README 描述清楚插件用途</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle className="w-4 h-4 text-green-500 mt-1" />
-                <span>遵循代码规范和安全要求</span>
+                <span>配置文件、入口点和包结构完整</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle className="w-4 h-4 text-green-500 mt-1" />
-                <span>编写完整的 README 文档</span>
+                <span>Release 或构建记录可以证明插件可打包</span>
               </li>
             </ul>
           </div>
@@ -403,25 +393,25 @@ export function Upload() {
                 <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center mt-0.5">
                   1
                 </span>
-                <span>提交插件信息</span>
+                <span>创建审核申请</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center mt-0.5">
                   2
                 </span>
-                <span>AI 自动分析评级</span>
+                <span>进入待审核队列</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center mt-0.5">
                   3
                 </span>
-                <span>管理员人工审核</span>
+                <span>审核员添加意见并给出结论</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center mt-0.5">
                   4
                 </span>
-                <span>审核通过后上架</span>
+                <span>通过后发布为市场插件</span>
               </li>
             </ul>
           </div>
