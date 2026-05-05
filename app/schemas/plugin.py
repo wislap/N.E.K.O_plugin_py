@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Any, Optional, List
+from typing import Optional, List
 from datetime import datetime
 
 from app.models.plugin import PluginStatus
@@ -16,11 +16,6 @@ class PluginBase(BaseModel):
     zone_id: Optional[int] = None
     zone_slug: Optional[str] = Field(None, max_length=50)
     tags: List[str] = []
-
-
-class PluginCreate(PluginBase):
-    slug: str = Field(..., min_length=1, max_length=100)
-    category_ids: Optional[List[int]] = []
 
 
 class PluginUpdate(BaseModel):
@@ -80,7 +75,6 @@ class Plugin(BaseModel):
     created_at: datetime
     updated_at: datetime
     published_at: Optional[datetime]
-    review_summary: Optional[dict[str, Any]] = None
 
 
 class PluginList(Plugin):

@@ -1,4 +1,4 @@
-from sqlalchemy import text, select, func
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -7,28 +7,6 @@ from app.models.user import User
 
 
 class BootstrapService:
-    @staticmethod
-    async def ensure_schema_compatibility(db: AsyncSession) -> None:
-        """Apply small SQLite-compatible schema additions for local auto-created DBs."""
-        bind = db.get_bind()
-        if bind and bind.dialect.name != "sqlite":
-            return
-
-        result = await db.execute(text("PRAGMA table_info(users)"))
-        columns = {row[1] for row in result.fetchall()}
-
-        if "must_change_password" not in columns:
-            await db.execute(
-                text("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0")
-            )
-            await db.commit()
-
-        if "email_verified_at" not in columns:
-            await db.execute(
-                text("ALTER TABLE users ADD COLUMN email_verified_at DATETIME")
-            )
-            await db.commit()
-
     @staticmethod
     async def ensure_initial_admin(db: AsyncSession) -> None:
         result = await db.execute(

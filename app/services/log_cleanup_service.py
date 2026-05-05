@@ -7,11 +7,11 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, and_
+from sqlalchemy import select, delete
 
 from app.core.config import settings
 from app.core.time import utc_now
-from app.models.plugin_review import PluginReview, PluginReviewHistory
+from app.models.plugin_submission import PluginReviewEvent
 from app.models.ai_sandbox_log import AISandboxLog
 from app.models.permission import PermissionAuditLog
 
@@ -132,32 +132,18 @@ class LogCleanupService:
         """
         cutoff_date = utc_now() - timedelta(days=self.review_log_retention_days)
         
-        # 删除审核历史记录
         result = await db.execute(
-            delete(PluginReviewHistory).where(
-                PluginReviewHistory.created_at < cutoff_date
+            delete(PluginReviewEvent).where(
+                PluginReviewEvent.created_at < cutoff_date
             )
         )
-        deleted_history = result.rowcount
-        
-        # 删除已完成的审核记录（保留 pending 和 manual_review 状态的）
-        result = await db.execute(
-            delete(PluginReview).where(
-                and_(
-                    PluginReview.created_at < cutoff_date,
-                    PluginReview.stage.in_(["approved", "rejected"])
-                )
-            )
-        )
-        deleted_reviews = result.rowcount
-        
+        deleted_events = result.rowcount
         await db.commit()
-        
-        total_deleted = deleted_history + deleted_reviews
-        if total_deleted > 0:
-            logger.info(f"清理审核日志: 删除 {total_deleted} 条记录 (历史: {deleted_history}, 审核: {deleted_reviews})")
-        
-        return total_deleted
+
+        if deleted_events > 0:
+            logger.info(f"清理审核事件日志: 删除 {deleted_events} 条记录")
+
+        return deleted_events
     
     async def cleanup_sandbox_logs(self, db: AsyncSession) -> int:
         """
@@ -213,11 +199,8 @@ class LogCleanupService:
         # 审核日志统计
         from sqlalchemy import func
         
-        result = await db.execute(select(func.count()).select_from(PluginReview))
-        review_count = result.scalar()
-        
-        result = await db.execute(select(func.count()).select_from(PluginReviewHistory))
-        review_history_count = result.scalar()
+        result = await db.execute(select(func.count()).select_from(PluginReviewEvent))
+        review_event_count = result.scalar()
         
         # 沙箱日志统计
         result = await db.execute(select(func.count()).select_from(AISandboxLog))
@@ -233,8 +216,8 @@ class LogCleanupService:
         cutoff_permission = utc_now() - timedelta(days=self.permission_audit_retention_days)
         
         result = await db.execute(
-            select(func.count()).select_from(PluginReviewHistory)
-            .where(PluginReviewHistory.created_at < cutoff_review)
+            select(func.count()).select_from(PluginReviewEvent)
+            .where(PluginReviewEvent.created_at < cutoff_review)
         )
         review_expiring = result.scalar()
         
@@ -252,11 +235,10 @@ class LogCleanupService:
         
         return {
             "current_counts": {
-                "plugin_reviews": review_count,
-                "plugin_review_history": review_history_count,
+                "plugin_review_events": review_event_count,
                 "sandbox_logs": sandbox_count,
                 "permission_audit_logs": permission_audit_count,
-                "total": review_count + review_history_count + sandbox_count + permission_audit_count
+                "total": review_event_count + sandbox_count + permission_audit_count
             },
             "retention_settings": {
                 "review_logs_days": self.review_log_retention_days,
@@ -290,8 +272,8 @@ class LogCleanupService:
         """
         if log_type == "review":
             result = await db.execute(
-                delete(PluginReviewHistory).where(
-                    PluginReviewHistory.created_at < before_date
+                delete(PluginReviewEvent).where(
+                    PluginReviewEvent.created_at < before_date
                 )
             )
             deleted = result.rowcount

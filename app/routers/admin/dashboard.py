@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.time import utc_now
 from app.models.plugin import Plugin, PluginStatus
+from app.models.plugin_submission import PluginSubmission, ReviewDecision, SubmissionStatus
 from app.models.user import User
 
 
@@ -68,17 +69,26 @@ async def get_dashboard_stats(
         )
 
     if can_access(current_user, "plugin:review"):
-        status_rows = await db.execute(
-            select(Plugin.status, func.count(Plugin.id)).group_by(Plugin.status)
+        submission_rows = await db.execute(
+            select(PluginSubmission.status, func.count(PluginSubmission.id)).group_by(PluginSubmission.status)
         )
-        counts = {row[0]: row[1] for row in status_rows.all()}
-        stats.totalPlugins = sum(counts.values())
-        stats.pendingPlugins = counts.get(PluginStatus.PENDING, 0)
-        stats.approvedPlugins = counts.get(PluginStatus.APPROVED, 0)
-        stats.rejectedPlugins = counts.get(PluginStatus.REJECTED, 0)
+        submission_counts = {row[0]: row[1] for row in submission_rows.all()}
+        stats.pendingPlugins = (
+            submission_counts.get(SubmissionStatus.SUBMITTED, 0)
+            + submission_counts.get(SubmissionStatus.IN_REVIEW, 0)
+        )
+        stats.approvedPlugins = await count_query(
+            db,
+            select(func.count(Plugin.id)).where(Plugin.status == PluginStatus.APPROVED),
+        )
+        stats.rejectedPlugins = await count_query(
+            db,
+            select(func.count(PluginSubmission.id)).where(PluginSubmission.decision == ReviewDecision.REJECTED),
+        )
+        stats.totalPlugins = stats.approvedPlugins + stats.pendingPlugins + stats.rejectedPlugins
         stats.recentPlugins = await count_query(
             db,
-            select(func.count(Plugin.id)).where(Plugin.created_at >= week_ago),
+            select(func.count(PluginSubmission.id)).where(PluginSubmission.created_at >= week_ago),
         )
 
     return stats

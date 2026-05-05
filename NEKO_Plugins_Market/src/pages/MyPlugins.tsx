@@ -14,30 +14,39 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { pluginsApi } from '@/services/plugins';
-import type { Plugin } from '@/services/types';
+import { submissionsApi, type PluginSubmission } from '@/services/submissions';
 import { listContainer, listItem, softReveal } from '@/lib/animations';
 import { isDebugAuthEnabled } from '@/lib/debug';
 import { getErrorMessage, reportError } from '@/lib/error-reporting';
 
 const statusMeta: Record<string, { label: string; className: string; icon: typeof Clock }> = {
-  pending: {
+  draft: {
+    label: '草稿',
+    className: 'border-slate-500/20 bg-slate-500/10 text-slate-300',
+    icon: Clock
+  },
+  submitted: {
     label: '待审核',
     className: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300',
     icon: Clock
   },
-  approved: {
+  in_review: {
+    label: '审核中',
+    className: 'border-blue-500/20 bg-blue-500/10 text-blue-300',
+    icon: Clock
+  },
+  closed_approved: {
     label: '已通过',
     className: 'border-green-500/20 bg-green-500/10 text-green-300',
     icon: CheckCircle
   },
-  rejected: {
+  closed_rejected: {
     label: '已拒绝',
     className: 'border-red-500/20 bg-red-500/10 text-red-300',
     icon: XCircle
   },
-  disabled: {
-    label: '已禁用',
+  closed: {
+    label: '已关闭',
     className: 'border-slate-500/20 bg-slate-500/10 text-slate-300',
     icon: ShieldOff
   }
@@ -55,14 +64,19 @@ function formatDate(value?: string | null) {
   });
 }
 
-function getReviewNote(plugin: Plugin) {
-  return plugin.review_summary?.manual_review_notes || plugin.review_summary?.review_feedback || '';
+function submissionStatusKey(submission: PluginSubmission) {
+  if (submission.status !== 'closed') {
+    return submission.status;
+  }
+  if (submission.decision === 'approved') return 'closed_approved';
+  if (submission.decision === 'rejected') return 'closed_rejected';
+  return 'closed';
 }
 
 export function MyPlugins() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [plugins, setPlugins] = useState<Plugin[]>([]);
+  const [submissions, setSubmissions] = useState<PluginSubmission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -76,13 +90,13 @@ export function MyPlugins() {
 
     let isMounted = true;
 
-    async function fetchPlugins() {
+    async function fetchSubmissions() {
       try {
         setIsLoading(true);
         setErrorMessage('');
-        const data = await pluginsApi.mine();
+        const data = await submissionsApi.mine();
         if (isMounted) {
-          setPlugins(data);
+          setSubmissions(data.items);
         }
       } catch (error) {
         if (isMounted) {
@@ -92,7 +106,7 @@ export function MyPlugins() {
           title: '我的插件加载失败',
           context: {
             module: 'myPlugins',
-            action: 'mine'
+            action: 'submissionsMine'
           }
         });
       } finally {
@@ -102,7 +116,7 @@ export function MyPlugins() {
       }
     }
 
-    fetchPlugins();
+    fetchSubmissions();
 
     return () => {
       isMounted = false;
@@ -110,11 +124,11 @@ export function MyPlugins() {
   }, [location.pathname, location.search, navigate]);
 
   const stats = useMemo(() => ({
-    total: plugins.length,
-    pending: plugins.filter((plugin) => plugin.status === 'pending').length,
-    approved: plugins.filter((plugin) => plugin.status === 'approved').length,
-    rejected: plugins.filter((plugin) => plugin.status === 'rejected').length
-  }), [plugins]);
+    total: submissions.length,
+    pending: submissions.filter((submission) => submission.status === 'submitted' || submission.status === 'in_review').length,
+    approved: submissions.filter((submission) => submission.decision === 'approved').length,
+    rejected: submissions.filter((submission) => submission.decision === 'rejected').length
+  }), [submissions]);
 
   return (
     <main className="min-h-screen bg-[#0F0F1A] pt-24 pb-20">
@@ -158,7 +172,7 @@ export function MyPlugins() {
           <motion.div variants={softReveal} initial="initial" animate="animate" className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-red-300">
             {errorMessage}
           </motion.div>
-        ) : plugins.length === 0 ? (
+        ) : submissions.length === 0 ? (
           <motion.div variants={softReveal} initial="initial" animate="animate" className="rounded-2xl border border-slate-800/50 bg-[#1A1A2E] p-12 text-center">
             <Package className="mx-auto mb-4 h-12 w-12 text-slate-500" />
             <h2 className="text-xl font-semibold text-white">还没有提交插件</h2>
@@ -172,15 +186,15 @@ export function MyPlugins() {
           </motion.div>
         ) : (
           <motion.div variants={listContainer} initial="initial" animate="animate" className="space-y-4">
-            {plugins.map((plugin) => {
-              const meta = statusMeta[plugin.status] ?? statusMeta.pending;
+            {submissions.map((submission) => {
+              const snapshot = submission.current_snapshot;
+              const meta = statusMeta[submissionStatusKey(submission)] ?? statusMeta.submitted;
               const StatusIcon = meta.icon;
-              const reviewNote = getReviewNote(plugin);
-              const reviewedAt = plugin.review_summary?.completed_at || plugin.review_summary?.manual_reviewed_at;
+              const closedAt = submission.closed_at;
 
               return (
                 <motion.article
-                  key={plugin.id}
+                  key={submission.id}
                   variants={listItem}
                   className="rounded-2xl border border-slate-800/50 bg-[#1A1A2E] p-5 transition-colors hover:border-primary/30"
                 >
@@ -191,20 +205,20 @@ export function MyPlugins() {
                           <StatusIcon className="mr-1 h-3 w-3" />
                           {meta.label}
                         </Badge>
-                        <span className="text-xs font-mono text-slate-500">v{plugin.version}</span>
+                          <span className="text-xs font-mono text-slate-500">申请 #{submission.id}</span>
                       </div>
-                      <h2 className="truncate text-xl font-semibold text-white">{plugin.name}</h2>
+                      <h2 className="truncate text-xl font-semibold text-white">{snapshot?.plugin_name ?? `提交 #${submission.id}`}</h2>
                       <p className="mt-1 line-clamp-2 text-sm text-slate-400">
-                        {plugin.description || plugin.short_description || '暂无简介'}
+                        {snapshot?.description || snapshot?.short_description || '暂无简介'}
                       </p>
                       <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-500">
                         <span className="inline-flex items-center gap-1">
                           <Calendar className="h-4 w-4" />
-                          提交于 {formatDate(plugin.created_at)}
+                          提交于 {formatDate(submission.submitted_at ?? submission.created_at)}
                         </span>
-                        {plugin.repo_url && (
+                        {snapshot?.repo_url && (
                           <a
-                            href={plugin.repo_url}
+                            href={snapshot.repo_url}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-slate-400 hover:text-white"
@@ -215,28 +229,21 @@ export function MyPlugins() {
                           </a>
                         )}
                       </div>
-                      {(reviewNote || reviewedAt) && (
+                      {closedAt && (
                         <div className="mt-4 rounded-xl border border-slate-800/70 bg-slate-950/40 p-4">
                           <div className="mb-1 text-sm font-medium text-slate-300">
-                            {plugin.status === 'rejected' ? '拒绝原因' : '审核意见'}
+                            审核状态
                           </div>
-                          {reviewNote && (
-                            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-400">
-                              {reviewNote}
-                            </p>
-                          )}
-                          {reviewedAt && (
-                            <div className="mt-2 text-xs text-slate-500">
-                              审核时间 {formatDate(reviewedAt)}
-                            </div>
-                          )}
+                          <div className="text-xs text-slate-500">
+                            关闭时间 {formatDate(closedAt)}
+                          </div>
                         </div>
                       )}
                     </div>
 
                     <div className="flex shrink-0 items-center gap-2">
-                      {plugin.status === 'approved' && (
-                        <Link to={`/plugin/${plugin.id}`}>
+                      {submission.plugin_id && submission.decision === 'approved' && (
+                        <Link to={`/plugin/${submission.plugin_id}`}>
                           <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white">
                             查看页面
                           </Button>

@@ -26,6 +26,8 @@ export default function AdminLogin() {
       const response = await authApi.login({ username, password });
       localStorage.setItem("token", response.access_token);
       localStorage.setItem("refreshToken", response.refresh_token);
+      localStorage.setItem("currentUser", JSON.stringify(response.user));
+      window.dispatchEvent(new Event("auth:changed"));
       navigate("/admin");
     } catch (err) {
       const message = getErrorMessage(err, "登录失败，请检查用户名和密码");

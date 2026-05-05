@@ -33,20 +33,11 @@ export interface Plugin {
   likes: number;
   rating_average: number;
   rating_count: number;
-  status: "pending" | "approved" | "rejected" | "disabled" | string;
+  status: "approved" | "disabled" | string;
   is_featured: number;
   created_at: string;
   updated_at: string;
   published_at?: string | null;
-  review_summary?: {
-    stage?: string | null;
-    manual_review_notes?: string | null;
-    review_feedback?: string | null;
-    manual_reviewed_at?: string | null;
-    completed_at?: string | null;
-    ai_score?: number | null;
-    ai_recommendation?: string | null;
-  } | null;
 }
 
 export interface Role {
@@ -157,17 +148,6 @@ export interface PaginatedResponse<T> {
 }
 
 export type RequestBody = unknown;
-
-export interface PluginCreateRequest {
-  name: string;
-  slug: string;
-  description?: string;
-  short_description?: string;
-  repo_url?: string;
-  zone_id?: number;
-  zone_slug?: string;
-  tags?: string[];
-}
 
 export type VerificationStatus = "unverified" | "pending" | "passed" | "failed";
 

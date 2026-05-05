@@ -593,10 +593,6 @@ class SubmissionReviewService:
             submission.decision = decision
             submission.closed_at = utc_now()
             submission.updated_at = utc_now()
-            if submission.plugin_id:
-                plugin = await db.get(Plugin, submission.plugin_id)
-                if plugin and decision == ReviewDecision.REJECTED:
-                    plugin.status = PluginStatus.REJECTED
             self._add_event(
                 db,
                 submission_id=submission.id,

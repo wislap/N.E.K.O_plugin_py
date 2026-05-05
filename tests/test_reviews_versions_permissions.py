@@ -22,19 +22,47 @@ async def login(client: AsyncClient, username: str, password: str = "password123
     return response.json()["access_token"]
 
 
-async def create_plugin(client: AsyncClient, token: str, slug: str = "owned-plugin") -> dict:
-    response = await client.post(
-        "/api/v1/plugins",
-        headers={"Authorization": f"Bearer {token}"},
+async def create_plugin(client: AsyncClient, owner_token: str, admin_token: str, slug: str = "owned-plugin") -> dict:
+    repo_slug = slug.replace("-", "_")
+    draft_response = await client.post(
+        "/api/v1/review/submissions/drafts",
+        headers={"Authorization": f"Bearer {owner_token}"},
         json={
-            "name": "Owned Plugin",
-            "slug": slug,
+            "repo_url": f"https://github.com/neko/n.e.k.o_plugin_{repo_slug}",
+            "plugin_name": "Owned Plugin",
+            "plugin_slug": slug,
             "description": "Plugin for permission tests",
             "short_description": "Permission tests",
         },
     )
-    assert response.status_code == 201
-    return response.json()
+    assert draft_response.status_code == 201
+    draft = draft_response.json()
+
+    submit_response = await client.post(
+        f"/api/v1/review/submissions/{draft['id']}/submit",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert submit_response.status_code == 200
+
+    start_response = await client.post(
+        f"/api/v1/admin/review/submissions/{draft['id']}/start",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert start_response.status_code == 200
+    case_id = start_response.json()["current_review_case_id"]
+
+    approve_response = await client.post(
+        f"/api/v1/admin/review/cases/{case_id}/approve",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"summary": "发布后允许评论", "force": True},
+    )
+    assert approve_response.status_code == 200
+    plugin_id = approve_response.json()["plugin_id"]
+    assert plugin_id is not None
+
+    plugin_response = await client.get(f"/api/v1/plugins/{plugin_id}")
+    assert plugin_response.status_code == 200
+    return plugin_response.json()
 
 
 async def test_reviews_require_login_and_owner_for_mutations(
@@ -50,21 +78,7 @@ async def test_reviews_require_login_and_owner_for_mutations(
     reviewer_token = await login(client, "reviewer")
     other_token = await login(client, "other")
     admin_token = await login(client, "admin")
-    plugin = await create_plugin(client, owner_token, "review-target")
-
-    pending_create = await client.post(
-        f"/api/v1/plugins/{plugin['id']}/reviews",
-        headers={"Authorization": f"Bearer {reviewer_token}"},
-        json={"rating": 4.5, "title": "Pending"},
-    )
-    assert pending_create.status_code == 404
-
-    approve_response = await client.post(
-        f"/api/v1/admin/plugins/{plugin['id']}/approve",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        json={"comment": "发布后允许评论"},
-    )
-    assert approve_response.status_code == 200
+    plugin = await create_plugin(client, owner_token, admin_token, "review-target")
 
     anonymous_create = await client.post(
         f"/api/v1/plugins/{plugin['id']}/reviews",
@@ -121,14 +135,7 @@ async def test_review_create_rolls_back_when_notification_fails(
     owner_token = await login(client, "atomic_review_owner")
     reviewer_token = await login(client, "atomic_reviewer")
     admin_token = await login(client, "atomic_review_admin")
-    plugin = await create_plugin(client, owner_token, "atomic-review-create")
-
-    approve_response = await client.post(
-        f"/api/v1/admin/plugins/{plugin['id']}/approve",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        json={"comment": "允许评论"},
-    )
-    assert approve_response.status_code == 200
+    plugin = await create_plugin(client, owner_token, admin_token, "atomic-review-create")
 
     def fail_add(*args, **kwargs):
         raise RuntimeError("notification boom")
@@ -163,14 +170,7 @@ async def test_review_update_rolls_back_when_rating_refresh_fails(
     owner_token = await login(client, "atomic_update_owner")
     reviewer_token = await login(client, "atomic_update_reviewer")
     admin_token = await login(client, "atomic_update_admin")
-    plugin = await create_plugin(client, owner_token, "atomic-review-update")
-
-    approve_response = await client.post(
-        f"/api/v1/admin/plugins/{plugin['id']}/approve",
-        headers={"Authorization": f"Bearer {admin_token}"},
-        json={"comment": "允许评论"},
-    )
-    assert approve_response.status_code == 200
+    plugin = await create_plugin(client, owner_token, admin_token, "atomic-review-update")
 
     create_response = await client.post(
         f"/api/v1/plugins/{plugin['id']}/reviews",
@@ -209,7 +209,7 @@ async def test_versions_require_plugin_owner_or_admin(
     owner_token = await login(client, "owner")
     other_token = await login(client, "other")
     admin_token = await login(client, "admin")
-    plugin = await create_plugin(client, owner_token, "version-target")
+    plugin = await create_plugin(client, owner_token, admin_token, "version-target")
 
     payload = {
         "version": "1.1.0",
@@ -256,9 +256,11 @@ async def test_version_can_store_trusted_release_provenance(
     db_session: AsyncSession,
 ):
     await create_test_user(db_session, "trusted_owner", "trusted-version-owner@example.com")
+    await create_test_user(db_session, "trusted_admin", "trusted-version-admin@example.com", is_admin=True)
 
     owner_token = await login(client, "trusted_owner")
-    plugin = await create_plugin(client, owner_token, "trusted-release")
+    admin_token = await login(client, "trusted_admin")
+    plugin = await create_plugin(client, owner_token, admin_token, "trusted-release")
     package_hash = "A" * 64
     payload_hash = "b" * 64
 
@@ -303,9 +305,11 @@ async def test_version_rejects_invalid_package_sha256(
     db_session: AsyncSession,
 ):
     await create_test_user(db_session, "bad_hash_owner", "bad-hash-owner@example.com")
+    await create_test_user(db_session, "bad_hash_admin", "bad-hash-admin@example.com", is_admin=True)
 
     owner_token = await login(client, "bad_hash_owner")
-    plugin = await create_plugin(client, owner_token, "bad-hash-release")
+    admin_token = await login(client, "bad_hash_admin")
+    plugin = await create_plugin(client, owner_token, admin_token, "bad-hash-release")
 
     response = await client.post(
         f"/api/v1/plugins/{plugin['id']}/versions",
@@ -326,9 +330,11 @@ async def test_version_create_rolls_back_when_plugin_sync_fails(
     monkeypatch: pytest.MonkeyPatch,
 ):
     await create_test_user(db_session, "atomic_version_owner", "atomic-version-owner@example.com")
+    await create_test_user(db_session, "atomic_version_admin", "atomic-version-admin@example.com", is_admin=True)
 
     owner_token = await login(client, "atomic_version_owner")
-    plugin = await create_plugin(client, owner_token, "atomic-version-create")
+    admin_token = await login(client, "atomic_version_admin")
+    plugin = await create_plugin(client, owner_token, admin_token, "atomic-version-create")
 
     def fail_sync(*args, **kwargs):
         raise RuntimeError("version sync boom")

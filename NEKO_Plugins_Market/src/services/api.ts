@@ -3,6 +3,7 @@ export { marketApi } from "./market";
 export { notificationsApi } from "./notifications";
 export { pluginsApi } from "./plugins";
 export { reviewsApi } from "./reviews";
+export { submissionsApi } from "./submissions";
 export { zonesApi } from "./zones";
 export { del, delWithBody, post, put, request } from "./http/client";
 export { ApiError } from "./http/errors";
@@ -17,7 +18,6 @@ export type {
   PaginatedResponse,
   PasswordChangeRequest,
   Plugin,
-  PluginCreateRequest,
   PluginQuery,
   RegisterRequest,
   RequestBody,

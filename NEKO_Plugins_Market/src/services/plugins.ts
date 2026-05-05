@@ -1,6 +1,6 @@
 import { post, request } from "./http/client";
 import { toMarketPlugin } from "./mappers";
-import type { PaginatedResponse, Plugin, PluginCreateRequest, PluginQuery } from "./types";
+import type { PaginatedResponse, Plugin, PluginQuery } from "./types";
 import { queryString } from "./utils";
 
 export const pluginsApi = {
@@ -34,10 +34,6 @@ export const pluginsApi = {
 
   mine() {
     return request<Plugin[]>("/plugins/mine");
-  },
-
-  create(data: PluginCreateRequest) {
-    return post<Plugin>("/plugins", data);
   },
 
   recordDownload(pluginId: string) {

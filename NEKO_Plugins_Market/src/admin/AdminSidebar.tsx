@@ -42,7 +42,7 @@ interface AdminSidebarProps {
 }
 
 function isItemActive(item: AdminMenuItem, pathname: string) {
-  return pathname === item.path || (item.key === "reviewWorkspace" && pathname === "/admin/plugins");
+  return pathname === item.path;
 }
 
 function isGroupActive(item: AdminMenuItem, pathname: string) {

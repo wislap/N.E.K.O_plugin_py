@@ -53,7 +53,7 @@ function prefetchReviewArchive(queryClient: QueryClient) {
 export function preloadAdminRouteModule(pathname: string) {
   if (pathname === "/admin") return adminPageModules.dashboard();
   if (pathname === "/admin/review/overview") return adminPageModules.reviewOverview();
-  if (pathname === "/admin/review/workspace" || pathname === "/admin/plugins") return adminPageModules.reviewWorkspace();
+  if (pathname === "/admin/review/workspace") return adminPageModules.reviewWorkspace();
   if (pathname === "/admin/review/archive") return adminPageModules.reviewArchive();
   if (pathname === "/admin/users") return adminPageModules.users();
   if (pathname === "/admin/permissions") return adminPageModules.permissions();
@@ -69,7 +69,7 @@ export function preloadAdminRouteModule(pathname: string) {
 export function preloadAdminRouteData(pathname: string, queryClient: QueryClient) {
   if (pathname === "/admin") return prefetchDashboard(queryClient);
   if (pathname === "/admin/review/overview") return prefetchReviewOverview(queryClient);
-  if (pathname === "/admin/review/workspace" || pathname === "/admin/plugins") return prefetchReviewWorkspace(queryClient);
+  if (pathname === "/admin/review/workspace") return prefetchReviewWorkspace(queryClient);
   if (pathname === "/admin/review/archive") return prefetchReviewArchive(queryClient);
   return Promise.resolve();
 }

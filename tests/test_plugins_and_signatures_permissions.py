@@ -20,19 +20,45 @@ async def login(client: AsyncClient, username: str, password: str = "password123
     return response.json()["access_token"]
 
 
-async def create_plugin(client: AsyncClient, token: str, slug: str = "plugin-permissions") -> dict:
-    response = await client.post(
-        "/api/v1/plugins",
-        headers={"Authorization": f"Bearer {token}"},
+async def create_plugin(client: AsyncClient, owner_token: str, admin_token: str, slug: str = "plugin-permissions") -> dict:
+    repo_slug = slug.replace("-", "_")
+    draft_response = await client.post(
+        "/api/v1/review/submissions/drafts",
+        headers={"Authorization": f"Bearer {owner_token}"},
         json={
-            "name": "Plugin Permissions",
-            "slug": slug,
+            "repo_url": f"https://github.com/neko/n.e.k.o_plugin_{repo_slug}",
+            "plugin_name": "Plugin Permissions",
+            "plugin_slug": slug,
             "description": "Permission checks",
             "short_description": "Permission checks",
         },
     )
-    assert response.status_code == 201
-    return response.json()
+    assert draft_response.status_code == 201
+    draft = draft_response.json()
+
+    submit_response = await client.post(
+        f"/api/v1/review/submissions/{draft['id']}/submit",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert submit_response.status_code == 200
+
+    start_response = await client.post(
+        f"/api/v1/admin/review/submissions/{draft['id']}/start",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert start_response.status_code == 200
+    case_id = start_response.json()["current_review_case_id"]
+
+    approve_response = await client.post(
+        f"/api/v1/admin/review/cases/{case_id}/approve",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"summary": "Ready", "force": True},
+    )
+    assert approve_response.status_code == 200
+    plugin_id = approve_response.json()["plugin_id"]
+    plugin_response = await client.get(f"/api/v1/plugins/{plugin_id}")
+    assert plugin_response.status_code == 200
+    return plugin_response.json()
 
 
 async def test_plugin_update_delete_require_owner_or_admin(
@@ -46,7 +72,7 @@ async def test_plugin_update_delete_require_owner_or_admin(
     owner_token = await login(client, "owner")
     other_token = await login(client, "other")
     admin_token = await login(client, "admin")
-    plugin = await create_plugin(client, owner_token)
+    plugin = await create_plugin(client, owner_token, admin_token)
 
     other_update = await client.put(
         f"/api/v1/plugins/{plugin['id']}",

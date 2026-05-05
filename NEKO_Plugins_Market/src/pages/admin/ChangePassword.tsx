@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Lock, ShieldCheck } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { getErrorMessage, notifySuccess, reportError } from "@/lib/error-reporti
 
 export default function AdminChangePassword() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -37,7 +39,10 @@ export default function AdminChangePassword() {
         current_password: currentPassword,
         new_password: newPassword
       });
+      const token = localStorage.getItem("token");
       localStorage.setItem("currentUser", JSON.stringify(user));
+      queryClient.setQueryData(["admin", "currentUser", token], user);
+      window.dispatchEvent(new Event("auth:changed"));
       notifySuccess("密码已修改");
       navigate("/admin", { replace: true });
     } catch (err) {

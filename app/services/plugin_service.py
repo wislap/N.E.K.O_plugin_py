@@ -6,11 +6,8 @@ from typing import Optional, List
 from app.models.plugin import Plugin, PluginStatus
 from app.models.category import Category
 from app.core.time import utc_now
-from app.schemas.plugin import PluginCreate, PluginUpdate, PluginSearchParams
+from app.schemas.plugin import PluginUpdate, PluginSearchParams
 from app.schemas.common import PaginatedResponse
-from app.utils.plugin_validator import validate_plugin_repo
-from app.services.notification_service import NotificationService
-from app.services.transactions import commit_or_rollback
 
 
 class PluginService:
@@ -24,7 +21,6 @@ class PluginService:
                 selectinload(Plugin.categories),
                 selectinload(Plugin.author),
                 selectinload(Plugin.zone),
-                selectinload(Plugin.reviews_history),
             )
             .where(Plugin.id == plugin_id)
         )
@@ -35,7 +31,7 @@ class PluginService:
         """通过slug获取插件"""
         result = await db.execute(
             select(Plugin)
-            .options(selectinload(Plugin.zone), selectinload(Plugin.reviews_history))
+            .options(selectinload(Plugin.zone))
             .where(Plugin.slug == slug)
         )
         return result.scalar_one_or_none()
@@ -52,7 +48,6 @@ class PluginService:
         query = select(Plugin).options(
             selectinload(Plugin.categories),
             selectinload(Plugin.zone),
-            selectinload(Plugin.reviews_history),
         )
         
         # 构建过滤条件
@@ -131,79 +126,11 @@ class PluginService:
             .options(
                 selectinload(Plugin.categories),
                 selectinload(Plugin.zone),
-                selectinload(Plugin.reviews_history),
             )
             .where(Plugin.author_id == author_id)
             .order_by(desc(Plugin.created_at))
         )
         return list(result.scalars().all())
-    
-    @staticmethod
-    async def create_plugin(
-        db: AsyncSession,
-        plugin_data: PluginCreate,
-        author_id: int,
-        author_name: str
-    ) -> Plugin:
-        """创建新插件"""
-        # 检查slug是否已存在
-        existing = await PluginService.get_plugin_by_slug(db, plugin_data.slug)
-        if existing:
-            raise ValueError(f"插件slug '{plugin_data.slug}' 已存在")
-        
-        # 验证仓库命名规范
-        if plugin_data.repo_url:
-            is_valid, error_msg = validate_plugin_repo(plugin_data.repo_url)
-            if not is_valid:
-                raise ValueError(f"仓库地址验证失败: {error_msg}")
-        
-        zone_id = plugin_data.zone_id
-        if plugin_data.zone_slug:
-            from app.services.zone_service import ZoneService
-
-            zone = await ZoneService.get_zone_by_slug(db, plugin_data.zone_slug)
-            if not zone:
-                raise ValueError(f"分区 '{plugin_data.zone_slug}' 不存在")
-            zone_id = zone.id
-
-        async with commit_or_rollback(db):
-            plugin = Plugin(
-                name=plugin_data.name,
-                slug=plugin_data.slug,
-                description=plugin_data.description,
-                short_description=plugin_data.short_description,
-                author_id=author_id,
-                author_name=author_name,
-                download_url=plugin_data.download_url,
-                icon_url=plugin_data.icon_url,
-                repo_url=plugin_data.repo_url,
-                readme=plugin_data.readme,
-                zone_id=zone_id,
-                tags=plugin_data.tags,
-                status=PluginStatus.PENDING  # 新插件默认待审核
-            )
-
-            db.add(plugin)
-            await db.flush()  # 获取plugin.id
-
-            # 添加分类关联
-            if plugin_data.category_ids:
-                categories_result = await db.execute(
-                    select(Category).where(Category.id.in_(plugin_data.category_ids))
-                )
-                categories = categories_result.scalars().all()
-                plugin.categories = list(categories)
-
-            await NotificationService.notify_admins(
-                db,
-                type="plugin_submitted",
-                title="有新的插件待审核",
-                content=f"{author_name} 提交了插件「{plugin.name}」。",
-                target_url="/admin/plugins",
-            )
-
-        created_plugin = await PluginService.get_plugin_by_id(db, plugin.id)
-        return created_plugin or plugin
     
     @staticmethod
     async def update_plugin(
@@ -257,14 +184,6 @@ class PluginService:
         return plugin
     
     @staticmethod
-    async def reject_plugin(db: AsyncSession, plugin: Plugin) -> Plugin:
-        """拒绝插件"""
-        plugin.status = PluginStatus.REJECTED
-        await db.commit()
-        await db.refresh(plugin)
-        return plugin
-    
-    @staticmethod
     async def increment_download_count(db: AsyncSession, plugin_id: int) -> None:
         """增加下载计数"""
         plugin = await PluginService.get_plugin_by_id(db, plugin_id)
@@ -299,7 +218,6 @@ class PluginService:
             .options(
                 selectinload(Plugin.categories),
                 selectinload(Plugin.zone),
-                selectinload(Plugin.reviews_history),
             )
             .where(
                 and_(
@@ -320,7 +238,6 @@ class PluginService:
             .options(
                 selectinload(Plugin.categories),
                 selectinload(Plugin.zone),
-                selectinload(Plugin.reviews_history),
             )
             .where(Plugin.status == PluginStatus.APPROVED)
             .order_by(desc(Plugin.download_count))
@@ -336,7 +253,6 @@ class PluginService:
             .options(
                 selectinload(Plugin.categories),
                 selectinload(Plugin.zone),
-                selectinload(Plugin.reviews_history),
             )
             .where(Plugin.status == PluginStatus.APPROVED)
             .order_by(desc(Plugin.created_at))

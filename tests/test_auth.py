@@ -201,3 +201,30 @@ async def test_bootstrap_initial_admin_must_change_password(
 
     assert change_response.status_code == 200
     assert change_response.json()["must_change_password"] is False
+
+    old_password_response = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "root", "password": "password"},
+    )
+    assert old_password_response.status_code == 401
+
+    new_password_response = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "root", "password": "new-password"},
+    )
+    assert new_password_response.status_code == 200
+    assert new_password_response.json()["user"]["must_change_password"] is False
+
+    await BootstrapService.ensure_initial_admin(db_session)
+
+    old_password_after_bootstrap = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "root", "password": "password"},
+    )
+    assert old_password_after_bootstrap.status_code == 401
+
+    new_password_after_bootstrap = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "root", "password": "new-password"},
+    )
+    assert new_password_after_bootstrap.status_code == 200

@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { zones } from '@/data';
-import { pluginsApi } from '@/services/plugins';
+import { submissionsApi } from '@/services/submissions';
 import { isDebugAuthEnabled } from '@/lib/debug';
 import { getErrorMessage, notifySuccess, reportError } from '@/lib/error-reporting';
 
@@ -37,7 +37,6 @@ const standardTags = [
 export function Upload() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [githubUrl, setGithubUrl] = useState('');
   const [pluginName, setPluginName] = useState('');
   const [description, setDescription] = useState('');
@@ -55,16 +54,14 @@ export function Upload() {
       .replace(/^-+|-+$/g, '')
       .slice(0, 100);
 
+  const hasUploadAccess = isDebugAuthEnabled || Boolean(localStorage.getItem('token'));
+
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token && !isDebugAuthEnabled) {
+    if (!hasUploadAccess) {
       const next = `${location.pathname}${location.search}`;
       navigate(`/login?next=${encodeURIComponent(next)}`, { replace: true });
-      return;
     }
-
-    setIsCheckingAuth(false);
-  }, [location.pathname, location.search, navigate]);
+  }, [hasUploadAccess, location.pathname, location.search, navigate]);
 
   const handleTagToggle = (tag: string) => {
     setSelectedTags((prev) =>
@@ -80,24 +77,26 @@ export function Upload() {
     setErrorMessage('');
 
     try {
-      await pluginsApi.create({
-        name: pluginName.trim(),
-        slug: slugify(pluginName),
+      await submissionsApi.createAndSubmit({
+        plugin_name: pluginName.trim(),
+        plugin_slug: slugify(pluginName),
         description: description.trim() || undefined,
         short_description: description.trim().slice(0, 255) || undefined,
         repo_url: githubUrl.trim(),
         zone_slug: selectedZone,
-        tags: selectedTags
-      });
-      notifySuccess('插件已提交审核', {
+        tags: selectedTags,
+        metadata: {
+          source: 'web_upload'
+        }
+      }, '用户从上传页提交申请');
+      notifySuccess('插件申请已提交审核', {
         context: {
           module: 'upload',
-          action: 'createPlugin',
+          action: 'createSubmission',
           pluginName: pluginName.trim(),
           repoUrl: githubUrl.trim()
         }
       });
-      navigate('/my/plugins');
       setShowSuccess(true);
     } catch (error) {
       const message = getErrorMessage(error, '上传失败，请稍后重试');
@@ -106,7 +105,7 @@ export function Upload() {
         title: '上传插件失败',
         context: {
           module: 'upload',
-          action: 'createPlugin',
+          action: 'createSubmission',
           pluginName: pluginName.trim(),
           repoUrl: githubUrl.trim(),
           zoneSlug: selectedZone,
@@ -124,7 +123,7 @@ export function Upload() {
     selectedZone &&
     selectedTags.length > 0;
 
-  if (isCheckingAuth) {
+  if (!hasUploadAccess) {
     return (
       <main className="min-h-screen bg-[#0F0F1A] pt-24 pb-20">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">

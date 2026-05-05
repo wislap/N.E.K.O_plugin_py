@@ -456,28 +456,12 @@ async def test_dashboard_stats_are_scoped_by_permission(
 
     db_session.add_all([
         Plugin(
-            name="Pending Dashboard Plugin",
-            slug="pending-dashboard-plugin",
-            author_id=owner.id,
-            author_name=owner.username,
-            version="1.0.0",
-            status=PluginStatus.PENDING,
-        ),
-        Plugin(
             name="Approved Dashboard Plugin",
             slug="approved-dashboard-plugin",
             author_id=owner.id,
             author_name=owner.username,
             version="1.0.0",
             status=PluginStatus.APPROVED,
-        ),
-        Plugin(
-            name="Rejected Dashboard Plugin",
-            slug="rejected-dashboard-plugin",
-            author_id=owner.id,
-            author_name=owner.username,
-            version="1.0.0",
-            status=PluginStatus.REJECTED,
         ),
     ])
     await db_session.commit()
@@ -500,10 +484,10 @@ async def test_dashboard_stats_are_scoped_by_permission(
     assert reviewer_response.status_code == 200
     reviewer_stats = reviewer_response.json()
     assert reviewer_stats["totalUsers"] == 0
-    assert reviewer_stats["totalPlugins"] == 3
-    assert reviewer_stats["pendingPlugins"] == 1
+    assert reviewer_stats["totalPlugins"] == 1
+    assert reviewer_stats["pendingPlugins"] == 0
     assert reviewer_stats["approvedPlugins"] == 1
-    assert reviewer_stats["rejectedPlugins"] == 1
+    assert reviewer_stats["rejectedPlugins"] == 0
 
     user_operator_response = await client.get(
         "/api/v1/admin/dashboard/stats",
@@ -521,4 +505,4 @@ async def test_dashboard_stats_are_scoped_by_permission(
     assert admin_response.status_code == 200
     admin_stats = admin_response.json()
     assert admin_stats["totalUsers"] == 5
-    assert admin_stats["totalPlugins"] == 3
+    assert admin_stats["totalPlugins"] == 1

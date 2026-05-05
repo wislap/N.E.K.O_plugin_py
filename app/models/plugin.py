@@ -8,9 +8,7 @@ from app.core.time import utc_now
 
 
 class PluginStatus(str, enum.Enum):
-    PENDING = "pending"      # 待审核
     APPROVED = "approved"    # 已通过
-    REJECTED = "rejected"    # 已拒绝
     DISABLED = "disabled"    # 已禁用
 
 
@@ -50,7 +48,7 @@ class Plugin(Base):
     rating_count = Column(Integer, default=0)
     
     # 状态
-    status = Column(Enum(PluginStatus), default=PluginStatus.PENDING)
+    status = Column(Enum(PluginStatus), default=PluginStatus.APPROVED)
     is_featured = Column(Integer, default=0)  # 是否推荐
     
     # 时间戳
@@ -63,7 +61,6 @@ class Plugin(Base):
     reviews = relationship("Review", back_populates="plugin", cascade="all, delete-orphan")
     versions = relationship("Version", back_populates="plugin", cascade="all, delete-orphan")
     categories = relationship("Category", secondary="plugin_categories", back_populates="plugins")
-    reviews_history = relationship("PluginReview", back_populates="plugin")
     signatures = relationship("PluginSignature", back_populates="plugin")
     zone = relationship("Zone", back_populates="plugins")
     ratings = relationship("PluginRating", back_populates="plugin", cascade="all, delete-orphan")
@@ -94,34 +91,6 @@ class Plugin(Base):
             return None
         return self.zone.slug if self.zone else None
 
-    @property
-    def review_summary(self):
-        """获取最近一次审核摘要，供提交者和管理员查看。"""
-        if "reviews_history" in inspect(self).unloaded:
-            return None
-
-        reviews = list(self.reviews_history or [])
-        if not reviews:
-            return None
-
-        latest_review = max(
-            reviews,
-            key=lambda review: review.completed_at
-            or review.manual_reviewed_at
-            or review.submitted_at
-            or self.created_at,
-        )
-
-        return {
-            "stage": latest_review.stage.value if latest_review.stage else None,
-            "manual_review_notes": latest_review.manual_review_notes,
-            "review_feedback": latest_review.review_feedback,
-            "manual_reviewed_at": latest_review.manual_reviewed_at,
-            "completed_at": latest_review.completed_at,
-            "ai_score": latest_review.ai_score,
-            "ai_recommendation": latest_review.ai_recommendation,
-        }
-    
     def to_frontend_dict(self):
         """转换为前端需要的格式"""
         return {

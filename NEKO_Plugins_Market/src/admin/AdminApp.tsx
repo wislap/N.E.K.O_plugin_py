@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AdminSessionProvider } from "@/admin/auth";
 import { AdminShell } from "@/admin/AdminShell";
@@ -54,7 +54,6 @@ function AdminRouteTree() {
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin/*" element={<AdminShell />}>
         <Route index element={withPageSuspense(<AdminDashboard />)} />
-        <Route path="plugins" element={<Navigate to="/admin/review/workspace" replace />} />
         <Route path="review/overview" element={withPageSuspense(<ReviewOverview />)} />
         <Route path="review/workspace" element={withPageSuspense(<ReviewWorkspace />)} />
         <Route path="review/archive" element={withPageSuspense(<ReviewArchive />)} />

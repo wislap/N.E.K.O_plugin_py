@@ -4,7 +4,6 @@ from app.models.user import User
 from app.models.review import Review
 from app.models.version import Version
 from app.models.plugin_category import PluginCategory
-from app.models.plugin_review import PluginReview, PluginReviewHistory, ReviewStage
 from app.models.plugin_signature import PluginSignature, ServerKeyPair
 from app.models.zone import Zone
 from app.models.plugin_rating import PluginRating, RatingGrade
@@ -35,7 +34,6 @@ __all__ = [
     "Review",
     "Version",
     "PluginCategory",
-    "PluginReview", "PluginReviewHistory", "ReviewStage",
     "PluginSignature", "ServerKeyPair",
     "Zone",
     "PluginRating", "RatingGrade",

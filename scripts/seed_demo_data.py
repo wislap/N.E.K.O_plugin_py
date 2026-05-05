@@ -26,12 +26,9 @@ from app.models import (
     Plugin,
     PluginCategory,
     PluginRating,
-    PluginReview,
-    PluginReviewHistory,
     PluginStatus,
     RatingGrade,
     Review,
-    ReviewStage,
     User,
     Version,
     Zone,
@@ -41,17 +38,9 @@ from app.services.permission_service import PermissionService
 
 
 def status_from_value(value: str) -> PluginStatus:
-    return PluginStatus(value)
-
-
-def review_stage_for_status(status: PluginStatus) -> ReviewStage:
-    if status == PluginStatus.APPROVED:
-        return ReviewStage.APPROVED
-    if status == PluginStatus.REJECTED:
-        return ReviewStage.REJECTED
-    if status == PluginStatus.DISABLED:
-        return ReviewStage.APPROVED
-    return ReviewStage.SUBMITTED
+    if value == PluginStatus.APPROVED.value:
+        return PluginStatus.APPROVED
+    return PluginStatus.DISABLED
 
 
 async def get_or_create_zone(db, zone_data: dict) -> Zone:
@@ -124,8 +113,6 @@ async def upsert_root_admin(db) -> User:
 
 
 async def remove_existing_plugin_artifacts(db, plugin: Plugin) -> None:
-    await db.execute(delete(PluginReviewHistory).where(PluginReviewHistory.plugin_id == plugin.id))
-    await db.execute(delete(PluginReview).where(PluginReview.plugin_id == plugin.id))
     await db.execute(delete(PluginRating).where(PluginRating.plugin_id == plugin.id))
     await db.execute(delete(Review).where(Review.plugin_id == plugin.id))
     await db.execute(delete(Version).where(Version.plugin_id == plugin.id))
@@ -180,51 +167,6 @@ async def upsert_plugin(db, plugin_data: dict, users: dict[str, User], zones: di
             )
         )
 
-    stage = review_stage_for_status(status)
-    reviewer = users["reviewer"]
-    completed = status in {PluginStatus.APPROVED, PluginStatus.REJECTED, PluginStatus.DISABLED}
-    review = PluginReview(
-        plugin_id=plugin.id,
-        repo_url=plugin.repo_url,
-        repo_branch=plugin.repo_branch,
-        stage=stage,
-        ai_score=plugin_data["ai_score"],
-        ai_recommendation=plugin_data["ai_recommendation"],
-        review_feedback=plugin_data["review_note"] or None,
-        manual_reviewer_id=reviewer.id if completed else None,
-        manual_review_notes=plugin_data["review_note"] or None,
-        submitted_at=now,
-        ai_reviewed_at=now,
-        manual_reviewed_at=now if completed else None,
-        completed_at=now if completed else None,
-    )
-    db.add(review)
-    await db.flush()
-
-    db.add(
-        PluginReviewHistory(
-            plugin_id=plugin.id,
-            review_id=review.id,
-            from_stage=None,
-            to_stage=ReviewStage.SUBMITTED.value,
-            notes="Demo seed: 插件提交审核",
-            operator_id=author.id,
-            operator_type="user",
-        )
-    )
-    if completed:
-        db.add(
-            PluginReviewHistory(
-                plugin_id=plugin.id,
-                review_id=review.id,
-                from_stage=ReviewStage.SUBMITTED.value,
-                to_stage=stage.value,
-                notes=f"Demo seed: {plugin_data['review_note']}",
-                operator_id=reviewer.id,
-                operator_type="user",
-            )
-        )
-
     db.add(
         Version(
             plugin_id=plugin.id,
@@ -236,6 +178,7 @@ async def upsert_plugin(db, plugin_data: dict, users: dict[str, User], zones: di
     )
 
     if status == PluginStatus.APPROVED:
+        reviewer = users["reviewer"]
         db.add(
             PluginRating(
                 plugin_id=plugin.id,
@@ -294,7 +237,6 @@ async def seed_demo_data() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
     async with AsyncSessionLocal() as db:
-        await BootstrapService.ensure_schema_compatibility(db)
         await BootstrapService.ensure_initial_admin(db)
         await PermissionService().init_system_permissions(db)
 

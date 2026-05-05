@@ -1,11 +1,11 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { authApi } from "@/services/auth";
 import { adminApi } from "@/services/adminApi";
 import { AdminSessionContext, type AdminSession } from "@/admin/session";
 
-function hasStoredToken() {
-  return Boolean(localStorage.getItem("token"));
+function getStoredToken() {
+  return localStorage.getItem("token");
 }
 
 function clearStoredSession() {
@@ -17,10 +17,22 @@ function clearStoredSession() {
 
 export function AdminSessionProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
-  const hasToken = hasStoredToken();
+  const [token, setToken] = useState(getStoredToken);
+  const hasToken = Boolean(token);
+
+  useEffect(() => {
+    const syncToken = () => setToken(getStoredToken());
+
+    window.addEventListener("auth:changed", syncToken);
+    window.addEventListener("storage", syncToken);
+    return () => {
+      window.removeEventListener("auth:changed", syncToken);
+      window.removeEventListener("storage", syncToken);
+    };
+  }, []);
 
   const userQuery = useQuery({
-    queryKey: ["admin", "currentUser"],
+    queryKey: ["admin", "currentUser", token],
     queryFn: authApi.getCurrentUser,
     enabled: hasToken,
     staleTime: 5 * 60 * 1000,
@@ -28,7 +40,7 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
   });
 
   const permissionsQuery = useQuery({
-    queryKey: ["admin", "permissions", "me"],
+    queryKey: ["admin", "permissions", "me", token],
     queryFn: adminApi.getMyPermissions,
     enabled: hasToken,
     staleTime: 5 * 60 * 1000,

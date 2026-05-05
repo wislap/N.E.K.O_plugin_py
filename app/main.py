@@ -4,12 +4,11 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
-from app.routers import plugins, categories, users, reviews, versions, auth, plugin_reviews, signatures, zones, notifications, submissions
+from app.routers import plugins, categories, users, reviews, versions, auth, signatures, zones, notifications, submissions
 from app.routers.admin import categories as admin_categories
 from app.routers.admin import dashboard as admin_dashboard
 from app.routers.admin import logs as admin_logs
 from app.routers.admin import permissions as admin_permissions
-from app.routers.admin import plugins as admin_plugins
 from app.routers.admin import review as admin_review
 from app.routers.admin import settings as admin_settings
 from app.routers.admin import signatures as admin_signatures
@@ -28,7 +27,6 @@ async def lifespan(app: FastAPI):
             await conn.run_sync(Base.metadata.create_all)
 
     async with AsyncSessionLocal() as db:
-        await BootstrapService.ensure_schema_compatibility(db)
         await BootstrapService.ensure_initial_admin(db)
         await PermissionService().init_system_permissions(db)
     
@@ -65,12 +63,10 @@ app.include_router(zones.router, prefix="/api/v1", tags=["zones"])
 app.include_router(users.router, prefix="/api/v1", tags=["users"])
 app.include_router(reviews.router, prefix="/api/v1", tags=["reviews"])
 app.include_router(versions.router, prefix="/api/v1", tags=["versions"])
-app.include_router(plugin_reviews.router, prefix="/api/v1", tags=["plugin_reviews"])
 app.include_router(signatures.router, prefix="/api/v1/signatures", tags=["signatures"])
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
 app.include_router(submissions.router, prefix="/api/v1", tags=["review-submissions"])
 app.include_router(admin_dashboard.router, prefix="/api/v1/admin", tags=["admin-dashboard"])
-app.include_router(admin_plugins.router, prefix="/api/v1/admin", tags=["admin-plugins"])
 app.include_router(admin_review.router, prefix="/api/v1/admin", tags=["admin-review"])
 app.include_router(admin_users.router, prefix="/api/v1/admin", tags=["admin-users"])
 app.include_router(admin_permissions.router, prefix="/api/v1/admin", tags=["admin-permissions"])

@@ -6,7 +6,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.plugin import (
-    PluginCreate, PluginUpdate, PluginList, PluginDetail,
+    PluginUpdate, PluginList, PluginDetail,
     PluginSearchParams, Plugin as PluginSchema
 )
 from app.schemas.common import PaginatedResponse, MessageResponse
@@ -134,29 +134,6 @@ async def get_plugin_by_slug(
             detail="插件不存在或尚未发布"
         )
     return plugin
-
-
-@router.post("/plugins", response_model=PluginSchema, status_code=status.HTTP_201_CREATED)
-async def create_plugin(
-    plugin_data: PluginCreate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    创建新插件（需要登录）
-    """
-    try:
-        plugin = await PluginService.create_plugin(
-            db, plugin_data, 
-            author_id=current_user.id, 
-            author_name=current_user.username
-        )
-        return plugin
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
 
 
 @router.put("/plugins/{plugin_id}", response_model=PluginSchema)

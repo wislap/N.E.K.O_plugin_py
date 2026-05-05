@@ -18,8 +18,6 @@ from app.models import (
     Plugin,
     PluginCategory,
     PluginRating,
-    PluginReview,
-    PluginReviewHistory,
     Review,
     User,
     Version,
@@ -44,8 +42,6 @@ async def clear_demo_data() -> None:
         user_ids = list(dict.fromkeys(user_ids))
 
         if plugin_ids:
-            await db.execute(delete(PluginReviewHistory).where(PluginReviewHistory.plugin_id.in_(plugin_ids)))
-            await db.execute(delete(PluginReview).where(PluginReview.plugin_id.in_(plugin_ids)))
             await db.execute(delete(PluginRating).where(PluginRating.plugin_id.in_(plugin_ids)))
             await db.execute(delete(Review).where(Review.plugin_id.in_(plugin_ids)))
             await db.execute(delete(Version).where(Version.plugin_id.in_(plugin_ids)))

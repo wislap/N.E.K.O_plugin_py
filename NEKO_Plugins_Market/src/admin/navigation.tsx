@@ -57,8 +57,5 @@ export function getAdminTitle(pathname: string) {
   if (pathname === "/admin/change-password") {
     return "修改初始密码";
   }
-  if (pathname === "/admin/plugins") {
-    return "工作区";
-  }
   return flatAdminMenuItems.find((item) => item.path === pathname)?.label ?? "管理后台";
 }
