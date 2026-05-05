@@ -3,7 +3,6 @@ import * as categoriesApi from "@/services/admin/categories";
 import * as dashboardApi from "@/services/admin/dashboard";
 import * as logsApi from "@/services/admin/logs";
 import * as permissionsApi from "@/services/admin/permissions";
-import * as pluginsApi from "@/services/admin/plugins";
 import * as reviewApi from "@/services/admin/review";
 import * as settingsApi from "@/services/admin/settings";
 import * as signaturesApi from "@/services/admin/signatures";
@@ -16,8 +15,15 @@ export type {
   DashboardStats,
   LogStats,
   Plugin,
+  ReviewCase,
+  ReviewComment,
+  ReviewCommentPayload,
+  ReviewCounts,
+  ReviewEvent,
   ReviewOverview,
   ReviewSubmission,
+  ReviewSubmissionDetail,
+  ReviewSubmissionSnapshot,
   Role,
   ServerKeyPair,
   SMTPSettings,
@@ -40,7 +46,6 @@ export const adminApi = {
   ...categoriesApi,
   ...zonesApi,
   ...signaturesApi,
-  ...pluginsApi,
   ...reviewApi,
   ...permissionsApi,
   ...settingsApi,

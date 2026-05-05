@@ -1,4 +1,5 @@
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { lazy, Suspense, type ReactNode } from 'react';
+import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
@@ -6,51 +7,31 @@ import { PageTransition } from '@/components/PageTransition';
 import { AppDiagnostics } from '@/components/AppDiagnostics';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Toaster } from '@/components/ui/sonner';
-import { Home } from '@/pages/Home';
-import { Plugins } from '@/pages/Plugins';
-import { PluginDetail } from '@/pages/PluginDetail';
-import { Upload } from '@/pages/Upload';
-import { Auth } from '@/pages/Auth';
-import { VerifyEmail } from '@/pages/VerifyEmail';
-import { MyPlugins } from '@/pages/MyPlugins';
-import AdminLayout from '@/pages/admin/AdminLayout';
-import AdminLogin from '@/pages/admin/Login';
-import AdminDashboard from '@/pages/admin/Dashboard';
-import AdminPlugins from '@/pages/admin/Plugins';
-import ReviewOverview from '@/pages/admin/ReviewOverview';
-import ReviewArchive from '@/pages/admin/ReviewArchive';
-import AdminUsers from '@/pages/admin/Users';
-import AdminPermissions from '@/pages/admin/Permissions';
-import AdminSMTP from '@/pages/admin/SMTP';
-import AdminSettings from '@/pages/admin/Settings';
-import AdminLogs from '@/pages/admin/Logs';
-import AdminChangePassword from '@/pages/admin/ChangePassword';
-import AdminCategories from '@/pages/admin/Categories';
-import AdminZones from '@/pages/admin/Zones';
-import AdminSignatures from '@/pages/admin/Signatures';
 
-function AdminRoutes() {
+const Home = lazy(() => import('@/pages/Home').then((module) => ({ default: module.Home })));
+const Plugins = lazy(() => import('@/pages/Plugins').then((module) => ({ default: module.Plugins })));
+const PluginDetail = lazy(() => import('@/pages/PluginDetail').then((module) => ({ default: module.PluginDetail })));
+const Upload = lazy(() => import('@/pages/Upload').then((module) => ({ default: module.Upload })));
+const Auth = lazy(() => import('@/pages/Auth').then((module) => ({ default: module.Auth })));
+const VerifyEmail = lazy(() => import('@/pages/VerifyEmail').then((module) => ({ default: module.VerifyEmail })));
+const MyPlugins = lazy(() => import('@/pages/MyPlugins').then((module) => ({ default: module.MyPlugins })));
+const AdminApp = lazy(() => import('@/admin/AdminApp').then((module) => ({ default: module.AdminApp })));
+
+function PageFallback() {
   return (
-    <Routes>
-      <Route path="/admin/login" element={<AdminLogin />} />
-      <Route path="/admin/*" element={<AdminLayout />}>
-        <Route index element={<AdminDashboard />} />
-        <Route path="plugins" element={<Navigate to="/admin/review/workspace" replace />} />
-        <Route path="review/overview" element={<ReviewOverview />} />
-        <Route path="review/workspace" element={<AdminPlugins />} />
-        <Route path="review/archive" element={<ReviewArchive />} />
-        <Route path="users" element={<AdminUsers />} />
-        <Route path="permissions" element={<AdminPermissions />} />
-        <Route path="smtp" element={<AdminSMTP />} />
-        <Route path="settings" element={<AdminSettings />} />
-        <Route path="logs" element={<AdminLogs />} />
-        <Route path="categories" element={<AdminCategories />} />
-        <Route path="zones" element={<AdminZones />} />
-        <Route path="signatures" element={<AdminSignatures />} />
-        <Route path="change-password" element={<AdminChangePassword />} />
-      </Route>
-    </Routes>
+    <div className="mx-auto flex min-h-[60vh] w-full max-w-7xl flex-col gap-4 px-4 py-10 sm:px-6 lg:px-8">
+      <div className="h-8 w-56 animate-pulse rounded-md bg-slate-800/80" />
+      <div className="grid gap-4 md:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="h-32 animate-pulse rounded-xl border border-slate-800/70 bg-[#1A1A2E]" />
+        ))}
+      </div>
+    </div>
   );
+}
+
+function withPublicSuspense(element: ReactNode) {
+  return <PageTransition><Suspense fallback={<PageFallback />}>{element}</Suspense></PageTransition>;
 }
 
 function PublicRoutes() {
@@ -61,14 +42,14 @@ function PublicRoutes() {
       <Header />
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
-          <Route path="/" element={<PageTransition><Home /></PageTransition>} />
-          <Route path="/plugins" element={<PageTransition><Plugins /></PageTransition>} />
-          <Route path="/plugin/:id" element={<PageTransition><PluginDetail /></PageTransition>} />
-          <Route path="/upload" element={<PageTransition><Upload /></PageTransition>} />
-          <Route path="/my/plugins" element={<PageTransition><MyPlugins /></PageTransition>} />
-          <Route path="/login" element={<PageTransition><Auth /></PageTransition>} />
-          <Route path="/register" element={<PageTransition><Auth /></PageTransition>} />
-          <Route path="/verify-email" element={<PageTransition><VerifyEmail /></PageTransition>} />
+          <Route path="/" element={withPublicSuspense(<Home />)} />
+          <Route path="/plugins" element={withPublicSuspense(<Plugins />)} />
+          <Route path="/plugin/:id" element={withPublicSuspense(<PluginDetail />)} />
+          <Route path="/upload" element={withPublicSuspense(<Upload />)} />
+          <Route path="/my/plugins" element={withPublicSuspense(<MyPlugins />)} />
+          <Route path="/login" element={withPublicSuspense(<Auth />)} />
+          <Route path="/register" element={withPublicSuspense(<Auth />)} />
+          <Route path="/verify-email" element={withPublicSuspense(<VerifyEmail />)} />
         </Routes>
       </AnimatePresence>
       <Footer />
@@ -80,7 +61,9 @@ function MainLayout() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
 
-  return isAdminRoute ? <AdminRoutes /> : <PublicRoutes />;
+  return isAdminRoute
+    ? <Suspense fallback={<PageFallback />}><AdminApp /></Suspense>
+    : <PublicRoutes />;
 }
 
 function App() {

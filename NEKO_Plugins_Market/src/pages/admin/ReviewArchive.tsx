@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
 import { Archive, CheckCircle2, CircleSlash, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { adminApi, type ReviewSubmission } from "@/services/adminApi";
-import { logError } from "@/lib/error-reporting";
+import type { ReviewSubmission } from "@/services/adminApi";
+import { REVIEW_ARCHIVE_LIST_PARAMS, useReviewSubmissions } from "@/admin/reviewQueries";
 
 function decisionLabel(decision: ReviewSubmission["decision"]) {
   if (decision === "approved") return "已通过";
@@ -20,39 +19,17 @@ function decisionVariant(decision: ReviewSubmission["decision"]) {
 }
 
 export default function ReviewArchive() {
-  const [items, setItems] = useState<ReviewSubmission[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-    adminApi.getReviewSubmissions({ status: "closed", page_size: 50 })
-      .then((data) => {
-        if (mounted) {
-          setItems(data.items);
-        }
-      })
-      .catch((error) => {
-        logError(error, {
-          title: "获取审核归档失败",
-          userMessage: "无法加载插件审核归档，请稍后重试。",
-          context: { module: "admin.review", action: "archive" }
-        });
-      })
-      .finally(() => {
-        if (mounted) {
-          setIsLoading(false);
-        }
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const { data, isLoading, isFetching } = useReviewSubmissions(REVIEW_ARCHIVE_LIST_PARAMS);
+  const items = data?.items ?? [];
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold">审核归档</h2>
-        <p className="text-muted-foreground">保留所有关闭后的审核申请，方便误操作恢复和后续追溯。</p>
+        <p className="text-muted-foreground">
+          保留所有关闭后的审核申请，方便误操作恢复和后续追溯。
+          {isFetching && !isLoading ? " 正在同步最新数据..." : ""}
+        </p>
       </div>
 
       <div className="space-y-3">

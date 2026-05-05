@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
 import { Archive, CheckCircle2, ClipboardList, MessageSquareWarning, ShieldAlert, Timer } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { adminApi, type ReviewOverview as ReviewOverviewData } from "@/services/adminApi";
-import { logError } from "@/lib/error-reporting";
+import { useReviewOverview } from "@/admin/reviewQueries";
 
 const overviewCards = [
   { key: "submitted", label: "待进入审核", icon: ClipboardList },
@@ -15,39 +13,16 @@ const overviewCards = [
 ] as const;
 
 export default function ReviewOverview() {
-  const [overview, setOverview] = useState<ReviewOverviewData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-    adminApi.getReviewOverview()
-      .then((data) => {
-        if (mounted) {
-          setOverview(data);
-        }
-      })
-      .catch((error) => {
-        logError(error, {
-          title: "获取审核总览失败",
-          userMessage: "无法加载插件审核总览，请稍后重试。",
-          context: { module: "admin.review", action: "overview" }
-        });
-      })
-      .finally(() => {
-        if (mounted) {
-          setIsLoading(false);
-        }
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const { data: overview, isLoading, isFetching } = useReviewOverview();
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold">审核总览</h2>
-        <p className="text-muted-foreground">查看插件审核队列、风险评论和归档结果。</p>
+        <p className="text-muted-foreground">
+          查看插件审核队列、风险评论和归档结果。
+          {isFetching && !isLoading ? " 正在同步最新数据..." : ""}
+        </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

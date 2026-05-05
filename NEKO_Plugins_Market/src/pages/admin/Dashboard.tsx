@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Users,
@@ -12,14 +11,12 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  adminApi,
   canAccessAdminPermission,
-  type DashboardStats,
-  type UserPermissions
 } from "@/services/adminApi";
 import { adminModules } from "@/lib/adminModules";
 import type { AdminModule } from "@/lib/adminModules";
-import { reportError } from "@/lib/error-reporting";
+import { useAdminSession } from "@/admin/session";
+import { useDashboardStats } from "@/admin/dashboardQueries";
 
 function flattenModules(modules: AdminModule[]): AdminModule[] {
   return modules.flatMap((module) => [module, ...(module.children ? flattenModules(module.children) : [])]);
@@ -30,7 +27,9 @@ const adminModuleByKey = Object.fromEntries(
 );
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<DashboardStats>({
+  const { permissions } = useAdminSession();
+  const { data, isLoading } = useDashboardStats();
+  const stats = data ?? {
     totalUsers: 0,
     totalPlugins: 0,
     pendingPlugins: 0,
@@ -38,30 +37,6 @@ export default function AdminDashboard() {
     rejectedPlugins: 0,
     recentUsers: 0,
     recentPlugins: 0
-  });
-  const [permissions, setPermissions] = useState<UserPermissions | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  const fetchStats = async () => {
-    try {
-      setIsLoading(true);
-      const permissionState = await adminApi.getMyPermissions();
-      setPermissions(permissionState);
-      const data = await adminApi.getDashboardStats();
-      setStats(data);
-    } catch (error) {
-      reportError(error, {
-        title: "获取后台统计失败",
-        userMessage: "无法加载后台统计，请检查权限或稍后重试。",
-        context: { module: "admin.dashboard", action: "fetchStats" }
-      });
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const canReviewPlugins = canAccessAdminPermission(permissions, "plugin:review");
