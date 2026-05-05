@@ -70,6 +70,11 @@ test('upload creates a review submission visible in admin workspace', async ({ p
   await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByRole('dialog').getByRole('heading', { name: '审核意见' })).toBeVisible();
   await expect(page.getByRole('dialog').getByText(`https://github.com/wislap/n.e.k.o_plugin_e2e_${suffix}`)).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: '提交更新' }).click();
+  await page.getByLabel('分支或标签').fill('fix-e2e');
+  await page.getByLabel('更新说明').fill('补充 e2e 测试里的更新快照。');
+  await page.getByRole('dialog').getByRole('button', { name: '提交更新快照' }).click();
+  await expect(page.getByRole('dialog').getByText('fix-e2e').first()).toBeVisible();
 
   await loginAdmin(page, 'reviewer', 'password123');
   await page.goto('/#/admin/review/workspace');

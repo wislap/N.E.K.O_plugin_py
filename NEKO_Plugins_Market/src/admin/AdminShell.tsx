@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Menu } from "lucide-react";
@@ -37,6 +37,7 @@ export function AdminShell() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const warmedRoutesRef = useRef(false);
   const session = useAdminSession();
 
   useEffect(() => {
@@ -82,12 +83,19 @@ export function AdminShell() {
     if (!session.user || !session.permissions || session.user.must_change_password) {
       return;
     }
+    if (warmedRoutesRef.current || document.visibilityState !== "visible") {
+      return;
+    }
 
+    warmedRoutesRef.current = true;
     warmCommonAdminRoutes(queryClient);
   }, [queryClient, session.permissions, session.user]);
 
   useEffect(() => {
     if (!session.user || !session.permissions) {
+      return;
+    }
+    if (document.visibilityState !== "visible") {
       return;
     }
 

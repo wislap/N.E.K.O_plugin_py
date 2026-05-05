@@ -228,6 +228,69 @@ async def test_review_workspace_major_requires_force_and_reopen_keeps_history(
     assert len(owner_detail.json()["review_cases"]) == 2
 
 
+async def test_owner_revision_supersedes_open_review_case(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    await create_test_user(db_session, "revision_owner", "revision-owner@example.com")
+    reviewer = await create_test_user(db_session, "revision_reviewer", "revision-reviewer@example.com")
+    await grant_permission(db_session, reviewer, "plugin:review")
+
+    owner_token = await login(client, "revision_owner")
+    reviewer_token = await login(client, "revision_reviewer")
+    submitted = await create_submitted_review(client, owner_token, slug="revision-demo")
+
+    start_response = await client.post(
+        f"/api/v1/admin/review/submissions/{submitted['id']}/start",
+        headers=auth(reviewer_token),
+        json={"note": "first pass"},
+    )
+    assert start_response.status_code == 200
+    first_case_id = start_response.json()["current_review_case_id"]
+
+    comment_response = await client.post(
+        f"/api/v1/admin/review/cases/{first_case_id}/comments",
+        headers=auth(reviewer_token),
+        json={
+            "severity": "major",
+            "target_area": "docs",
+            "body": "README 需要补充使用方式。",
+        },
+    )
+    assert comment_response.status_code == 201
+
+    revision_response = await client.post(
+        f"/api/v1/review/submissions/{submitted['id']}/revision",
+        headers=auth(owner_token),
+        json={
+            "description": "A plugin submitted through the new review workspace. README updated.",
+            "submitted_ref": "fix-readme",
+            "resolved_commit": "b" * 40,
+            "note": "已补充 README 使用方式。",
+        },
+    )
+    assert revision_response.status_code == 200
+    revised = revision_response.json()
+    assert revised["status"] == "submitted"
+    assert revised["current_review_case_id"] is None
+    assert revised["current_snapshot"]["revision_number"] == 2
+    assert revised["current_snapshot"]["submitted_ref"] == "fix-readme"
+    assert len(revised["snapshots"]) == 2
+
+    first_case = next(case for case in revised["review_cases"] if case["id"] == first_case_id)
+    assert first_case["status"] == "closed"
+    assert first_case["decision"] == "superseded"
+
+    restart_response = await client.post(
+        f"/api/v1/admin/review/submissions/{submitted['id']}/start",
+        headers=auth(reviewer_token),
+        json={"note": "second pass"},
+    )
+    assert restart_response.status_code == 200
+    assert restart_response.json()["status"] == "in_review"
+    assert restart_response.json()["current_review_case_id"] != first_case_id
+
+
 async def test_review_workspace_permissions(
     client: AsyncClient,
     db_session: AsyncSession,

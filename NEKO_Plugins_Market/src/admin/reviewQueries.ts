@@ -21,7 +21,7 @@ export function useReviewOverview() {
   return useQuery({
     queryKey: reviewKeys.overview,
     queryFn: adminApi.getReviewOverview,
-    staleTime: 30 * 1000
+    staleTime: 120 * 1000
   });
 }
 
@@ -30,7 +30,7 @@ export function useReviewSubmissions(params: Parameters<typeof adminApi.getRevie
     queryKey: reviewKeys.submissions(params),
     queryFn: () => adminApi.getReviewSubmissions(params),
     placeholderData: keepPreviousData,
-    staleTime: 15 * 1000
+    staleTime: 60 * 1000
   });
 }
 
@@ -39,7 +39,7 @@ export function useReviewSubmission(submissionId: number | null) {
     queryKey: reviewKeys.submission(submissionId),
     queryFn: () => adminApi.getReviewSubmission(submissionId as number),
     enabled: submissionId !== null,
-    staleTime: 15 * 1000
+    staleTime: 60 * 1000
   });
 }
 
@@ -49,7 +49,7 @@ export function usePrefetchReviewSubmission() {
   return (submissionId: number) => queryClient.prefetchQuery({
     queryKey: reviewKeys.submission(submissionId),
     queryFn: () => adminApi.getReviewSubmission(submissionId),
-    staleTime: 15 * 1000
+    staleTime: 60 * 1000
   });
 }
 

@@ -31,6 +31,7 @@ from app.schemas.plugin_submission import (
     ReviewCounts,
     SubmissionDraftCreate,
     SubmissionDraftUpdate,
+    SubmissionRevisionCreate,
 )
 from app.services.transactions import commit_or_rollback
 from app.utils.plugin_validator import validate_plugin_repo
@@ -125,6 +126,79 @@ class SubmissionReviewService:
                 actor_id=actor_id,
                 event_type=ReviewEventType.DRAFT_UPDATED,
                 payload={"snapshot_id": snapshot.id, "revision_number": next_revision},
+            )
+        return await self._reload_submission(db, submission.id)
+
+    async def create_revision(
+        self,
+        db: AsyncSession,
+        *,
+        submission: PluginSubmission,
+        actor_id: int,
+        data: SubmissionRevisionCreate,
+    ) -> PluginSubmission:
+        if submission.status == SubmissionStatus.CLOSED:
+            raise ValueError("已关闭的申请不能提交更新")
+        if submission.current_snapshot is None:
+            raise ValueError("申请缺少当前快照")
+
+        base = submission.current_snapshot
+        merged = SubmissionDraftCreate(
+            repo_url=data.repo_url if data.repo_url is not None else base.repo_url,
+            plugin_name=data.plugin_name if data.plugin_name is not None else base.plugin_name,
+            plugin_slug=data.plugin_slug if data.plugin_slug is not None else base.plugin_slug,
+            description=data.description if data.description is not None else base.description,
+            short_description=data.short_description if data.short_description is not None else base.short_description,
+            zone_slug=data.zone_slug if data.zone_slug is not None else base.zone_slug,
+            tags=data.tags if data.tags is not None else list(base.tags or []),
+            submitted_ref=data.submitted_ref if data.submitted_ref is not None else base.submitted_ref,
+            resolved_commit=data.resolved_commit if data.resolved_commit is not None else base.resolved_commit,
+            commit_url=data.commit_url if data.commit_url is not None else base.commit_url,
+            actions_run_url=data.actions_run_url if data.actions_run_url is not None else base.actions_run_url,
+            artifact_url=data.artifact_url if data.artifact_url is not None else base.artifact_url,
+            license_name=data.license_name if data.license_name is not None else base.license_name,
+            metadata=data.metadata if data.metadata is not None else dict(base.snapshot_metadata or {}),
+        )
+        self._validate_repo(merged.repo_url)
+
+        next_revision = len(submission.snapshots or []) + 1
+        async with commit_or_rollback(db):
+            snapshot = self._build_snapshot(submission.id, next_revision, merged)
+            db.add(snapshot)
+            await db.flush()
+
+            previous_case_id = submission.current_review_case_id
+            if submission.current_review_case and submission.current_review_case.status == ReviewCaseStatus.OPEN:
+                submission.current_review_case.status = ReviewCaseStatus.CLOSED
+                submission.current_review_case.decision = ReviewDecision.SUPERSEDED
+                submission.current_review_case.closed_by = actor_id
+                submission.current_review_case.closed_at = utc_now()
+                submission.current_review_case.decision_summary = data.note or "用户提交了新的更新快照"
+
+            submission.current_snapshot_id = snapshot.id
+            submission.current_snapshot = snapshot
+            if submission.snapshots is not None:
+                submission.snapshots.append(snapshot)
+            submission.current_review_case_id = None
+            submission.current_review_case = None
+            submission.status = SubmissionStatus.SUBMITTED
+            submission.decision = None
+            submission.closed_at = None
+            submission.updated_at = utc_now()
+            if submission.submitted_at is None:
+                submission.submitted_at = utc_now()
+            self._add_event(
+                db,
+                submission_id=submission.id,
+                case_id=previous_case_id,
+                actor_id=actor_id,
+                event_type=ReviewEventType.DRAFT_UPDATED,
+                payload={
+                    "note": data.note,
+                    "snapshot_id": snapshot.id,
+                    "revision_number": next_revision,
+                    "previous_case_id": previous_case_id,
+                },
             )
         return await self._reload_submission(db, submission.id)
 

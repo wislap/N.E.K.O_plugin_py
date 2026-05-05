@@ -4,9 +4,11 @@ import { motion } from 'framer-motion';
 import {
   Calendar,
   CheckCircle,
+  ChevronDown,
   Clock,
   Eye,
   ExternalLink,
+  GitBranch,
   Github,
   MessageSquare,
   Package,
@@ -23,6 +25,9 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { submissionsApi, type PluginSubmission, type PluginSubmissionDetail, type SubmissionReviewComment } from '@/services/submissions';
 import { listContainer, softReveal } from '@/lib/animations';
 import { isDebugAuthEnabled } from '@/lib/debug';
@@ -61,6 +66,25 @@ const statusMeta: Record<string, { label: string; className: string; icon: typeo
   }
 };
 
+const severityMeta: Record<SubmissionReviewComment['severity'], { label: string; className: string; rank: number }> = {
+  critical: { label: '必须修复', className: 'border-red-500/30 bg-red-500/10 text-red-300', rank: 0 },
+  major: { label: '重要问题', className: 'border-orange-500/30 bg-orange-500/10 text-orange-300', rank: 1 },
+  minor: { label: '一般建议', className: 'border-blue-500/30 bg-blue-500/10 text-blue-300', rank: 2 },
+  nitpick: { label: '细节建议', className: 'border-slate-500/30 bg-slate-500/10 text-slate-300', rank: 3 }
+};
+
+const targetAreaLabels: Record<SubmissionReviewComment['target_area'], string> = {
+  ownership: '所有权',
+  metadata: '元数据',
+  code: '代码',
+  security: '安全',
+  packaging: '打包',
+  license: '协议',
+  docs: '文档',
+  release: '发布',
+  other: '其他'
+};
+
 function formatDate(value?: string | null) {
   if (!value) {
     return '-';
@@ -83,10 +107,7 @@ function submissionStatusKey(submission: PluginSubmission) {
 }
 
 function severityClass(severity: SubmissionReviewComment['severity']) {
-  if (severity === 'critical') return 'border-red-500/30 bg-red-500/10 text-red-300';
-  if (severity === 'major') return 'border-orange-500/30 bg-orange-500/10 text-orange-300';
-  if (severity === 'minor') return 'border-blue-500/30 bg-blue-500/10 text-blue-300';
-  return 'border-slate-500/30 bg-slate-500/10 text-slate-300';
+  return severityMeta[severity].className;
 }
 
 export function MyPlugins() {
@@ -102,6 +123,18 @@ export function MyPlugins() {
   const [submissionDetail, setSubmissionDetail] = useState<PluginSubmissionDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
+  const [revisionOpen, setRevisionOpen] = useState(false);
+  const [revisionMoreOpen, setRevisionMoreOpen] = useState(false);
+  const [revisionSubmitting, setRevisionSubmitting] = useState(false);
+  const [revisionForm, setRevisionForm] = useState({
+    description: '',
+    submitted_ref: '',
+    resolved_commit: '',
+    actions_run_url: '',
+    artifact_url: '',
+    license_name: '',
+    note: ''
+  });
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -168,6 +201,17 @@ export function MyPlugins() {
     try {
       const detail = await submissionsApi.detail(submissionId);
       setSubmissionDetail(detail);
+      setRevisionForm({
+        description: detail.current_snapshot?.description ?? '',
+        submitted_ref: detail.current_snapshot?.submitted_ref ?? '',
+        resolved_commit: detail.current_snapshot?.resolved_commit ?? '',
+        actions_run_url: detail.current_snapshot?.actions_run_url ?? '',
+        artifact_url: detail.current_snapshot?.artifact_url ?? '',
+        license_name: detail.current_snapshot?.license_name ?? '',
+        note: ''
+      });
+      setRevisionOpen(false);
+      setRevisionMoreOpen(false);
     } catch (error) {
       setDetailError(getErrorMessage(error, '申请详情加载失败'));
       reportError(error, {
@@ -187,7 +231,76 @@ export function MyPlugins() {
   const detailFallbackSnapshot = selectedSubmission?.current_snapshot ?? null;
   const detailSnapshot = submissionDetail?.current_snapshot ?? detailFallbackSnapshot;
   const detailStatusMeta = statusMeta[submissionStatusKey(submissionDetail ?? selectedSubmission ?? { status: 'submitted' } as PluginSubmission)] ?? statusMeta.submitted;
-  const detailComments = submissionDetail?.review_cases.flatMap((reviewCase) => reviewCase.comments) ?? [];
+  const detailComments = useMemo(() => {
+    const comments = submissionDetail?.review_cases.flatMap((reviewCase) => reviewCase.comments) ?? [];
+    return [...comments].sort((left, right) => {
+      if (left.is_resolved !== right.is_resolved) {
+        return left.is_resolved ? 1 : -1;
+      }
+      return severityMeta[left.severity].rank - severityMeta[right.severity].rank;
+    });
+  }, [submissionDetail?.review_cases]);
+  const pendingComments = detailComments.filter((comment) => !comment.is_resolved);
+  const resolvedComments = detailComments.filter((comment) => comment.is_resolved);
+  const canSubmitRevision = Boolean(submissionDetail && submissionDetail.status !== 'closed');
+  const currentRevision = detailSnapshot?.revision_number ?? submissionDetail?.snapshots.length ?? 1;
+  const statusGuide = (() => {
+    if (!submissionDetail) {
+      return { title: '正在读取申请', description: '稍等片刻，系统正在载入最新状态。' };
+    }
+    if (submissionDetail.status === 'submitted') {
+      return { title: '等待审核', description: '申请已进入队列，审核员会基于当前快照继续处理。' };
+    }
+    if (submissionDetail.status === 'in_review') {
+      return pendingComments.length > 0
+        ? { title: '请处理审核意见', description: '优先处理未解决的必须修复和重要问题，完成后提交更新快照。' }
+        : { title: '审核中', description: '当前没有待处理意见，请等待审核员给出结论。' };
+    }
+    if (submissionDetail.decision === 'approved') {
+      return { title: '已通过', description: '申请已发布为市场插件。' };
+    }
+    if (submissionDetail.decision === 'rejected') {
+      return { title: '未通过', description: '查看审核意见后，可以准备新的申请或联系审核员确认原因。' };
+    }
+    return { title: '已关闭', description: '这条申请已经归档。' };
+  })();
+
+  const updateRevisionField = (field: keyof typeof revisionForm, value: string) => {
+    setRevisionForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const submitRevision = async () => {
+    if (!submissionDetail) return;
+    setRevisionSubmitting(true);
+    try {
+      const detail = await submissionsApi.createRevision(submissionDetail.id, {
+        description: revisionForm.description.trim() || null,
+        submitted_ref: revisionForm.submitted_ref.trim() || null,
+        resolved_commit: revisionForm.resolved_commit.trim() || null,
+        actions_run_url: revisionForm.actions_run_url.trim() || null,
+        artifact_url: revisionForm.artifact_url.trim() || null,
+        license_name: revisionForm.license_name.trim() || null,
+        note: revisionForm.note.trim() || null
+      });
+      setSubmissionDetail(detail);
+      setSubmissions((items) => items.map((item) => (item.id === detail.id ? detail : item)));
+      setRevisionOpen(false);
+      setRevisionMoreOpen(false);
+      setRevisionForm((current) => ({ ...current, note: '' }));
+    } catch (error) {
+      setDetailError(getErrorMessage(error, '提交更新失败'));
+      reportError(error, {
+        title: '提交申请更新失败',
+        context: {
+          module: 'myPlugins',
+          action: 'createRevision',
+          submissionId: submissionDetail.id
+        }
+      });
+    } finally {
+      setRevisionSubmitting(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-[#0F0F1A] pt-24 pb-20">
@@ -242,7 +355,7 @@ export function MyPlugins() {
             <p className="mt-2 text-slate-400">审核通过并发布后，对应插件会出现在这里。</p>
           </motion.div>
         ) : (
-          <motion.div variants={listContainer} initial="initial" animate="animate" className="space-y-3">
+          <motion.div variants={listContainer} initial="initial" animate="animate" className="divide-y divide-slate-800/70 overflow-hidden rounded-xl border border-slate-800/70 bg-[#171728]">
             {visibleSubmissions.map((submission) => {
               const snapshot = submission.current_snapshot;
               const meta = statusMeta[submissionStatusKey(submission)] ?? statusMeta.submitted;
@@ -253,15 +366,15 @@ export function MyPlugins() {
               return (
                 <article
                   key={submission.id}
-                  className={`rounded-xl border bg-[#171728] p-4 opacity-100 transition-colors ${
+                  className={`p-4 opacity-100 transition-colors ${
                     isHighlighted
-                      ? 'border-primary/80 shadow-[0_0_0_1px_rgba(96,165,250,0.25)]'
-                      : 'border-slate-800/50 hover:border-primary/30'
+                      ? 'bg-primary/10'
+                      : 'hover:bg-slate-900/40'
                   }`}
                 >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div className="min-w-0">
-                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <div className="mb-1.5 flex flex-wrap items-center gap-2">
                         <Badge variant="outline" className={meta.className}>
                           <StatusIcon className="mr-1 h-3 w-3" />
                           {meta.label}
@@ -273,11 +386,11 @@ export function MyPlugins() {
                         )}
                         <span className="text-xs font-mono text-slate-500">申请 #{submission.id}</span>
                       </div>
-                      <h2 className="truncate text-lg font-semibold text-white">{snapshot?.plugin_name ?? `提交 #${submission.id}`}</h2>
-                      <p className="mt-1 line-clamp-1 text-sm text-slate-400">
+                      <h2 className="truncate text-base font-semibold text-white">{snapshot?.plugin_name ?? `提交 #${submission.id}`}</h2>
+                      <p className="mt-1 line-clamp-1 max-w-3xl text-sm text-slate-400">
                         {snapshot?.description || snapshot?.short_description || '暂无简介'}
                       </p>
-                      <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-500">
                         <span className="inline-flex items-center gap-1">
                           <Calendar className="h-4 w-4" />
                           提交于 {formatDate(submission.submitted_at ?? submission.created_at)}
@@ -295,7 +408,7 @@ export function MyPlugins() {
                           </a>
                         )}
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-2 flex flex-wrap gap-2">
                         {(snapshot?.tags ?? []).map((tag) => (
                           <span key={tag} className="rounded-md border border-slate-800 bg-slate-950/60 px-2 py-1 text-xs text-slate-400">
                             {tag}
@@ -314,14 +427,14 @@ export function MyPlugins() {
                       )}
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-2 lg:pt-7">
+                    <div className="flex shrink-0 items-center gap-2 md:self-center">
                       <Button
                         type="button"
                         variant="outline"
                         onClick={() => openSubmissionDetail(submission.id)}
-                        className="border-primary/40 bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"
+                        className="h-9 border-slate-700 bg-transparent text-slate-200 hover:border-primary/60 hover:bg-primary/10 hover:text-primary"
                       >
-                        <Eye className="mr-2 h-4 w-4" />
+                        <Eye className="mr-2 h-4 w-4 text-primary" />
                         查看详情
                       </Button>
                       {submission.plugin_id && submission.decision === 'approved' && (
@@ -372,6 +485,28 @@ export function MyPlugins() {
             </div>
           ) : (
             <div className="space-y-5">
+              <section className="rounded-xl border border-primary/20 bg-primary/10 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className={detailStatusMeta.className}>
+                        {detailStatusMeta.label}
+                      </Badge>
+                      <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
+                        Revision {currentRevision}
+                      </Badge>
+                    </div>
+                    <h3 className="text-base font-semibold text-white">{statusGuide.title}</h3>
+                    <p className="mt-1 text-sm leading-6 text-slate-300">{statusGuide.description}</p>
+                  </div>
+                  {pendingComments.length > 0 && (
+                    <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-sm text-slate-300">
+                      待处理 {pendingComments.length}
+                    </div>
+                  )}
+                </div>
+              </section>
+
               <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                   <Badge variant="outline" className={detailStatusMeta.className}>
@@ -395,6 +530,14 @@ export function MyPlugins() {
                   <div>
                     <div className="text-slate-500">分区</div>
                     <div className="mt-1 text-slate-300">{detailSnapshot?.zone_slug ?? '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-500">分支或标签</div>
+                    <div className="mt-1 font-mono text-slate-300">{detailSnapshot?.submitted_ref ?? '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-500">Commit</div>
+                    <div className="mt-1 truncate font-mono text-slate-300">{detailSnapshot?.resolved_commit ?? '-'}</div>
                   </div>
                   <div className="md:col-span-2">
                     <div className="text-slate-500">仓库</div>
@@ -423,6 +566,127 @@ export function MyPlugins() {
                 </div>
               </section>
 
+              {canSubmitRevision && (
+                <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="font-semibold text-white">提交更新</h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        修复审核意见后提交新的快照，申请会回到待审核。
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setRevisionOpen((open) => !open)}
+                      className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+                    >
+                      {revisionOpen ? '收起' : '提交更新'}
+                    </Button>
+                  </div>
+
+                  {revisionOpen && (
+                    <div className="mt-4 grid gap-4">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="revision-note" className="text-slate-300">更新说明</Label>
+                          <Textarea
+                            id="revision-note"
+                            value={revisionForm.note}
+                            onChange={(event) => updateRevisionField('note', event.target.value)}
+                            placeholder="说明你处理了哪些审核意见"
+                            className="min-h-20 border-slate-700 bg-[#0F0F1A] text-slate-200"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="revision-ref" className="text-slate-300">分支或标签</Label>
+                          <Input
+                            id="revision-ref"
+                            value={revisionForm.submitted_ref}
+                            onChange={(event) => updateRevisionField('submitted_ref', event.target.value)}
+                            placeholder="main / v0.2.1"
+                            className="border-slate-700 bg-[#0F0F1A] text-slate-200"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="revision-commit" className="text-slate-300">Commit</Label>
+                          <Input
+                            id="revision-commit"
+                            value={revisionForm.resolved_commit}
+                            onChange={(event) => updateRevisionField('resolved_commit', event.target.value)}
+                            placeholder="40 位 commit hash"
+                            className="border-slate-700 bg-[#0F0F1A] text-slate-200"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setRevisionMoreOpen((open) => !open)}
+                        className="inline-flex w-fit items-center gap-1 text-sm text-slate-400 hover:text-white"
+                      >
+                        更多证明材料
+                        <ChevronDown className={`h-4 w-4 transition-transform ${revisionMoreOpen ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {revisionMoreOpen && (
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2 md:col-span-2">
+                            <Label htmlFor="revision-description" className="text-slate-300">简介</Label>
+                            <Textarea
+                              id="revision-description"
+                              value={revisionForm.description}
+                              onChange={(event) => updateRevisionField('description', event.target.value)}
+                              className="min-h-24 border-slate-700 bg-[#0F0F1A] text-slate-200"
+                            />
+                          </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="revision-actions" className="text-slate-300">GitHub Actions</Label>
+                          <Input
+                            id="revision-actions"
+                            value={revisionForm.actions_run_url}
+                            onChange={(event) => updateRevisionField('actions_run_url', event.target.value)}
+                            placeholder="https://github.com/.../actions/runs/..."
+                            className="border-slate-700 bg-[#0F0F1A] text-slate-200"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="revision-artifact" className="text-slate-300">构建产物</Label>
+                          <Input
+                            id="revision-artifact"
+                            value={revisionForm.artifact_url}
+                            onChange={(event) => updateRevisionField('artifact_url', event.target.value)}
+                            placeholder="Release 或 artifact URL"
+                            className="border-slate-700 bg-[#0F0F1A] text-slate-200"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="revision-license" className="text-slate-300">开源协议</Label>
+                          <Input
+                            id="revision-license"
+                            value={revisionForm.license_name}
+                            onChange={(event) => updateRevisionField('license_name', event.target.value)}
+                            placeholder="MIT / Apache-2.0"
+                            className="border-slate-700 bg-[#0F0F1A] text-slate-200"
+                          />
+                        </div>
+                        </div>
+                      )}
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          onClick={submitRevision}
+                          disabled={revisionSubmitting}
+                          className="bg-primary text-primary-foreground hover:bg-primary/90"
+                        >
+                          {revisionSubmitting ? '提交中...' : '提交更新快照'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
+
               <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <h3 className="flex items-center gap-2 font-semibold text-white">
@@ -440,30 +704,85 @@ export function MyPlugins() {
                     暂无审核意见
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {detailComments.map((comment) => (
-                      <div key={comment.id} className="rounded-lg border border-slate-800 bg-[#151527] p-3">
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <Badge variant="outline" className={severityClass(comment.severity)}>
-                            {comment.severity}
-                          </Badge>
-                          <span className="text-xs text-slate-500">{comment.target_area}</span>
-                          {comment.target_ref && <span className="text-xs text-slate-500">{comment.target_ref}</span>}
-                          {comment.is_resolved && (
-                            <Badge variant="outline" className="border-green-500/30 bg-green-500/10 text-green-300">
-                              已解决
-                            </Badge>
-                          )}
+                  <div className="space-y-5">
+                    {pendingComments.length > 0 && (
+                      <div>
+                        <h4 className="mb-2 text-sm font-medium text-slate-300">待处理</h4>
+                        <div className="space-y-3">
+                          {pendingComments.map((comment) => (
+                            <div key={comment.id} className="rounded-lg border border-slate-800 bg-[#151527] p-3">
+                              <div className="mb-2 flex flex-wrap items-center gap-2">
+                                <Badge variant="outline" className={severityClass(comment.severity)}>
+                                  {severityMeta[comment.severity].label}
+                                </Badge>
+                                <span className="text-xs text-slate-500">{targetAreaLabels[comment.target_area]}</span>
+                                {comment.target_ref && <span className="text-xs text-slate-500">{comment.target_ref}</span>}
+                              </div>
+                              <p className="whitespace-pre-wrap text-sm leading-6 text-slate-300">{comment.body}</p>
+                            </div>
+                          ))}
                         </div>
-                        <p className="whitespace-pre-wrap text-sm leading-6 text-slate-300">{comment.body}</p>
                       </div>
-                    ))}
+                    )}
+
+                    {resolvedComments.length > 0 && (
+                      <div>
+                        <h4 className="mb-2 text-sm font-medium text-slate-400">已处理</h4>
+                        <div className="space-y-3">
+                          {resolvedComments.map((comment) => (
+                            <div key={comment.id} className="rounded-lg border border-slate-800 bg-[#151527]/70 p-3">
+                              <div className="mb-2 flex flex-wrap items-center gap-2">
+                                <Badge variant="outline" className={severityClass(comment.severity)}>
+                                  {severityMeta[comment.severity].label}
+                                </Badge>
+                                <span className="text-xs text-slate-500">{targetAreaLabels[comment.target_area]}</span>
+                                {comment.target_ref && <span className="text-xs text-slate-500">{comment.target_ref}</span>}
+                                <Badge variant="outline" className="border-green-500/30 bg-green-500/10 text-green-300">
+                                  已解决
+                                </Badge>
+                              </div>
+                              <p className="whitespace-pre-wrap text-sm leading-6 text-slate-400">{comment.body}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </section>
 
               <section className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
                 <h3 className="mb-3 font-semibold text-white">处理记录</h3>
+                {submissionDetail?.snapshots.length ? (
+                  <div className="mb-5 rounded-lg border border-slate-800 bg-[#151527] p-3">
+                    <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-300">
+                      <GitBranch className="h-4 w-4 text-primary" />
+                      Revision 历史
+                    </h4>
+                    <div className="space-y-3">
+                      {[...submissionDetail.snapshots].reverse().map((snapshot) => {
+                        const isCurrent = snapshot.id === submissionDetail.current_snapshot_id;
+                        return (
+                          <div key={snapshot.id} className="flex flex-col gap-1 border-l border-slate-700 pl-3 text-sm">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-medium text-slate-200">Revision {snapshot.revision_number}</span>
+                              {isCurrent && (
+                                <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
+                                  当前
+                                </Badge>
+                              )}
+                              <span className="text-xs text-slate-500">{formatDate(snapshot.created_at)}</span>
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {snapshot.submitted_ref || '未填写 ref'}
+                              {snapshot.resolved_commit ? ` · ${snapshot.resolved_commit.slice(0, 12)}` : ''}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
                 {!submissionDetail?.events.length ? (
                   <div className="text-sm text-slate-500">暂无记录</div>
                 ) : (

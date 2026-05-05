@@ -22,7 +22,7 @@ function prefetchDashboard(queryClient: QueryClient) {
   return queryClient.prefetchQuery({
     queryKey: dashboardKeys.stats,
     queryFn: adminApi.getDashboardStats,
-    staleTime: 30 * 1000
+    staleTime: 120 * 1000
   });
 }
 
@@ -30,7 +30,7 @@ function prefetchReviewOverview(queryClient: QueryClient) {
   return queryClient.prefetchQuery({
     queryKey: reviewKeys.overview,
     queryFn: adminApi.getReviewOverview,
-    staleTime: 30 * 1000
+    staleTime: 120 * 1000
   });
 }
 
@@ -38,7 +38,7 @@ function prefetchReviewWorkspace(queryClient: QueryClient) {
   return queryClient.prefetchQuery({
     queryKey: reviewKeys.submissions(REVIEW_WORKSPACE_LIST_PARAMS),
     queryFn: () => adminApi.getReviewSubmissions(REVIEW_WORKSPACE_LIST_PARAMS),
-    staleTime: 15 * 1000
+    staleTime: 60 * 1000
   });
 }
 
@@ -46,7 +46,7 @@ function prefetchReviewArchive(queryClient: QueryClient) {
   return queryClient.prefetchQuery({
     queryKey: reviewKeys.submissions(REVIEW_ARCHIVE_LIST_PARAMS),
     queryFn: () => adminApi.getReviewSubmissions(REVIEW_ARCHIVE_LIST_PARAMS),
-    staleTime: 15 * 1000
+    staleTime: 60 * 1000
   });
 }
 
@@ -80,6 +80,10 @@ export function preloadAdminRoute(pathname: string, queryClient: QueryClient) {
 }
 
 export function warmCommonAdminRoutes(queryClient: QueryClient) {
+  if (document.visibilityState !== "visible") {
+    return;
+  }
+
   void adminPageModules.dashboard();
   void adminPageModules.reviewOverview();
   void adminPageModules.reviewWorkspace();

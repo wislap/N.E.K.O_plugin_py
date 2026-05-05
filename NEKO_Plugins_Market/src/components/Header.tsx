@@ -39,7 +39,7 @@ export function Header() {
   useEffect(() => {
     let isMounted = true;
 
-    async function fetchNotifications() {
+    async function fetchNotifications(options: { includeList?: boolean } = {}) {
       if (!currentUser) {
         setNotifications([]);
         setUnreadCount(0);
@@ -47,12 +47,15 @@ export function Header() {
       }
 
       try {
+        const includeList = options.includeList ?? notifications.length > 0;
         const [items, unread] = await Promise.all([
-          notificationsApi.list(8),
+          includeList ? notificationsApi.list(8) : Promise.resolve(null),
           notificationsApi.unreadCount()
         ]);
         if (isMounted) {
-          setNotifications(items);
+          if (items) {
+            setNotifications(items);
+          }
           setUnreadCount(unread.count);
         }
       } catch (error) {
@@ -71,16 +74,29 @@ export function Header() {
       }
     }
 
-    fetchNotifications();
-    const timer = window.setInterval(fetchNotifications, 30000);
-    window.addEventListener('notifications:changed', fetchNotifications);
+    const fetchUnreadIfVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchNotifications();
+      }
+    };
+    const fetchAllNotifications = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchNotifications({ includeList: true });
+      }
+    };
+
+    fetchUnreadIfVisible();
+    const timer = window.setInterval(fetchUnreadIfVisible, 90000);
+    window.addEventListener('notifications:changed', fetchAllNotifications);
+    document.addEventListener('visibilitychange', fetchUnreadIfVisible);
 
     return () => {
       isMounted = false;
       window.clearInterval(timer);
-      window.removeEventListener('notifications:changed', fetchNotifications);
+      window.removeEventListener('notifications:changed', fetchAllNotifications);
+      document.removeEventListener('visibilitychange', fetchUnreadIfVisible);
     };
-  }, [currentUser]);
+  }, [currentUser, notifications.length]);
 
   useEffect(() => {
     let isMounted = true;
@@ -292,7 +308,11 @@ export function Header() {
             </a>
             {currentUser ? (
               <div className="ml-2 flex items-center gap-2">
-                <DropdownMenu>
+                <DropdownMenu onOpenChange={(open) => {
+                  if (open) {
+                    window.dispatchEvent(new Event('notifications:changed'));
+                  }
+                }}>
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"

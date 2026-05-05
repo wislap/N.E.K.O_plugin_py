@@ -47,6 +47,10 @@ class SubmissionDraftUpdate(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+class SubmissionRevisionCreate(SubmissionDraftUpdate):
+    note: str | None = Field(None, max_length=1000)
+
+
 class SubmitRequest(BaseModel):
     note: str | None = Field(None, max_length=1000)
 

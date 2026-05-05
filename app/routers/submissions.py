@@ -11,6 +11,7 @@ from app.schemas.plugin_submission import (
     PluginSubmissionDetail,
     SubmissionDraftCreate,
     SubmissionDraftUpdate,
+    SubmissionRevisionCreate,
     SubmitRequest,
 )
 from app.services.submission_review_service import SubmissionFilters, SubmissionReviewService
@@ -96,6 +97,30 @@ async def update_submission_draft(
     try:
         updated = await service.update_draft(db, submission=submission, actor_id=current_user.id, data=data)
         return service.enrich_submission(updated)
+    except ValueError as error:
+        raise _bad_request(error)
+
+
+@router.post("/{submission_id}/revision", response_model=PluginSubmissionDetail)
+async def create_submission_revision(
+    submission_id: int,
+    data: SubmissionRevisionCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    submission = await _require_owned_submission(db, submission_id, current_user)
+    try:
+        updated = await service.create_revision(
+            db,
+            submission=submission,
+            actor_id=current_user.id,
+            data=data,
+        )
+        detail, events = await service.get_submission_with_events(db, updated.id)
+        if detail is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="提交申请不存在")
+        setattr(detail, "events", events)
+        return service.enrich_submission(detail)
     except ValueError as error:
         raise _bad_request(error)
 

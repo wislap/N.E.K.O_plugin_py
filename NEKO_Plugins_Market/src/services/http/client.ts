@@ -4,6 +4,10 @@ import { ApiError, parseErrorResponse } from "./errors";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 const REQUEST_ID_HEADER = "X-Request-ID";
+const REQUEST_MONITOR_WINDOW_MS = 10_000;
+const REQUEST_MONITOR_WARN_COUNT = 12;
+
+const requestMonitor = new Map<string, number[]>();
 
 function getToken() {
   return localStorage.getItem("token");
@@ -11,6 +15,21 @@ function getToken() {
 
 function createRequestId() {
   return `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function recordRequest(path: string) {
+  if (!import.meta.env.DEV) {
+    return;
+  }
+
+  const now = Date.now();
+  const recent = (requestMonitor.get(path) ?? []).filter((time) => now - time < REQUEST_MONITOR_WINDOW_MS);
+  recent.push(now);
+  requestMonitor.set(path, recent);
+
+  if (recent.length === REQUEST_MONITOR_WARN_COUNT) {
+    console.warn(`[api-monitor] ${path} requested ${recent.length} times in ${REQUEST_MONITOR_WINDOW_MS / 1000}s`);
+  }
 }
 
 function clearSession() {
@@ -58,6 +77,7 @@ async function refreshAccessToken(requestId: string) {
 }
 
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  recordRequest(path);
   const token = getToken();
   const headers = new Headers(options.headers);
   const method = options.method ?? "GET";

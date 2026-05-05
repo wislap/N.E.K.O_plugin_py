@@ -13,6 +13,24 @@ export interface SubmissionDraftCreateRequest {
   metadata?: Record<string, unknown>;
 }
 
+export interface SubmissionRevisionRequest {
+  repo_url?: string;
+  plugin_name?: string;
+  plugin_slug?: string;
+  description?: string | null;
+  short_description?: string | null;
+  zone_slug?: string | null;
+  tags?: string[];
+  submitted_ref?: string | null;
+  resolved_commit?: string | null;
+  commit_url?: string | null;
+  actions_run_url?: string | null;
+  artifact_url?: string | null;
+  license_name?: string | null;
+  metadata?: Record<string, unknown>;
+  note?: string | null;
+}
+
 export interface PluginSubmissionSnapshot {
   id: number;
   submission_id: number;
@@ -22,6 +40,10 @@ export interface PluginSubmissionSnapshot {
   repo_name?: string | null;
   submitted_ref?: string | null;
   resolved_commit?: string | null;
+  commit_url?: string | null;
+  actions_run_url?: string | null;
+  artifact_url?: string | null;
+  license_name?: string | null;
   plugin_name: string;
   plugin_slug: string;
   description?: string | null;
@@ -116,6 +138,10 @@ export const submissionsApi = {
 
   detail(submissionId: number) {
     return request<PluginSubmissionDetail>(`/review/submissions/${submissionId}`);
+  },
+
+  createRevision(submissionId: number, data: SubmissionRevisionRequest) {
+    return post<PluginSubmissionDetail>(`/review/submissions/${submissionId}/revision`, data);
   },
 
   async createAndSubmit(data: SubmissionDraftCreateRequest, note?: string) {
