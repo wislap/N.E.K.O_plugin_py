@@ -11,6 +11,7 @@ import {
   Shield,
   Bot,
   MessageSquare,
+  Plug,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +24,7 @@ import { marked } from 'marked';
 import 'highlight.js/styles/github-dark.css';
 import { pluginsApi } from '@/services/plugins';
 import { reviewsApi } from '@/services/reviews';
+import { nekoBridge } from '@/lib/neko-bridge';
 import type { Plugin, Review } from '@/types';
 import { getErrorMessage, logError, notifySuccess, reportError } from '@/lib/error-reporting';
 
@@ -48,6 +50,9 @@ export function PluginDetail() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [reviewError, setReviewError] = useState('');
+  const [nekoOnline, setNekoOnline] = useState<boolean | null>(null);
+  const [installStatus, setInstallStatus] = useState<'idle' | 'installing' | 'success' | 'error'>('idle');
+  const [installMessage, setInstallMessage] = useState('');
   const zone = plugin ? getZoneById(plugin.zone) : undefined;
 
   useEffect(() => {
@@ -98,6 +103,13 @@ export function PluginDetail() {
       isMounted = false;
     };
   }, [id]);
+
+  // 探测 N.E.K.O 客户端是否在线
+  useEffect(() => {
+    nekoBridge.probe().then((status) => {
+      setNekoOnline(!!status);
+    });
+  }, []);
 
   const handleDownload = async () => {
     if (!plugin || isDownloading) {
@@ -328,12 +340,74 @@ export function PluginDetail() {
 
               <Button
                 className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-95 text-primary-foreground py-6"
-                onClick={handleDownload}
-                disabled={isDownloading}
+                onClick={async () => {
+                  if (!plugin) return;
+
+                  if (nekoOnline && nekoBridge.hasToken) {
+                    // 一键安装到本地 N.E.K.O
+                    setInstallStatus('installing');
+                    setInstallMessage('正在安装...');
+                    const taskId = await nekoBridge.install(
+                      {
+                        package_url: plugin.downloadUrl || plugin.githubRepo || '',
+                        package_sha256: '', // TODO: 从 version 数据获取
+                        plugin_id: String(plugin.id),
+                        version: plugin.version,
+                      },
+                      (task) => {
+                        setInstallMessage(task.message);
+                        if (task.status === 'completed') {
+                          setInstallStatus('success');
+                          notifySuccess('插件已安装到 N.E.K.O', {
+                            context: { module: 'pluginDetail', action: 'nekoInstall' }
+                          });
+                        } else if (task.status === 'failed') {
+                          setInstallStatus('error');
+                          setInstallMessage(task.error || '安装失败');
+                        }
+                      },
+                    );
+                    if (!taskId) {
+                      // fallback 到 URI scheme / 下载
+                      setInstallStatus('idle');
+                      handleDownload();
+                    }
+                  } else {
+                    // 没有连接 N.E.K.O，走原有下载逻辑
+                    handleDownload();
+                  }
+                }}
+                disabled={isDownloading || installStatus === 'installing'}
               >
-                <Download className="w-5 h-5 mr-2" />
-                {isDownloading ? '正在记录...' : '安装插件'}
+                {installStatus === 'installing' ? (
+                  <>
+                    <Plug className="w-5 h-5 mr-2 animate-pulse" />
+                    {installMessage || '安装中...'}
+                  </>
+                ) : installStatus === 'success' ? (
+                  <>
+                    <Plug className="w-5 h-5 mr-2" />
+                    ✓ 已安装
+                  </>
+                ) : nekoOnline ? (
+                  <>
+                    <Plug className="w-5 h-5 mr-2" />
+                    安装到 N.E.K.O
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-5 h-5 mr-2" />
+                    {isDownloading ? '正在记录...' : '安装插件'}
+                  </>
+                )}
               </Button>
+
+              {nekoOnline !== null && (
+                <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                  <span className={`w-2 h-2 rounded-full ${nekoOnline ? 'bg-green-500' : 'bg-slate-600'}`} />
+                  {nekoOnline ? 'N.E.K.O 客户端已连接' : 'N.E.K.O 未检测到（将下载安装包）'}
+                </div>
+              )}
 
               <a
                 href={plugin.githubRepo}

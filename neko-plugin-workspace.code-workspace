@@ -1,0 +1,21 @@
+{
+  "folders": [
+    {
+      "name": "Plugin Market (Backend + Frontend)",
+      "path": "."
+    },
+    {
+      "name": "N.E.K.O",
+      "path": "/home/yun_wan/python_programe/N.E.K.O"
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/.pytest_cache": true,
+      "**/node_modules": true,
+      "**/.venv": true,
+      "**/.uv-cache": true
+    }
+  }
+}
