@@ -25,9 +25,7 @@ class Plugin(Base):
     author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     author_name = Column(String(100), nullable=False)
     
-    # 插件信息
-    version = Column(String(20), nullable=False, default="1.0.0")
-    download_url = Column(String(500), nullable=True)
+    # 插件展示
     icon_url = Column(String(500), nullable=True)
     
     # GitHub 仓库信息
@@ -92,12 +90,31 @@ class Plugin(Base):
         return self.zone.slug if self.zone else None
 
     def to_frontend_dict(self):
-        """转换为前端需要的格式"""
+        """转换为前端需要的格式
+
+        注意：`version` / `downloadUrl` 等"当前版本"语义已不再从 Plugin
+        本体读，转由 versions 表通过 `attach_latest_version` 投影出来。
+        本方法仅保留旧版本兼容路径下用到的字段；新代码应直接走 Pydantic
+        schema (`Plugin` / `LatestVersionPublic`)。
+        """
+        latest = getattr(self, "latest_version", None)
+        latest_dict = None
+        if latest is not None:
+            latest_dict = {
+                "version": latest.version,
+                "channel": latest.channel,
+                "package_url": latest.package_url or "",
+                "package_sha256": latest.package_sha256 or "",
+                "payload_hash": latest.payload_hash,
+                "created_at": (
+                    latest.created_at.isoformat() if latest.created_at else None
+                ),
+            }
         return {
             "id": str(self.id),
             "name": self.name,
             "description": self.description or self.short_description or "",
-            "version": self.version,
+            "latest_version": latest_dict,
             "author": {
                 "name": self.author_name,
                 "avatar": self.author.avatar_url if self.author else "",

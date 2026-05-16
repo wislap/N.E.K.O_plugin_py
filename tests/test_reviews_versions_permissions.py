@@ -3,10 +3,9 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Plugin, Review, Version
+from app.models import Plugin, Review
 from app.services.notification_service import NotificationService
 from app.services.plugin_service import PluginService
-from app.services.version_service import VersionService
 from tests.conftest import create_test_user
 
 
@@ -202,162 +201,25 @@ async def test_versions_require_plugin_owner_or_admin(
     client: AsyncClient,
     db_session: AsyncSession,
 ):
+    """旧的 POST/DELETE /versions 路由已删除（market-version-management spec），
+    新的覆盖矩阵在 tests/integration/test_publish_from_release.py 与
+    tests/integration/test_yank.py 中。本占位用例确认这两条旧路由已 404。"""
     await create_test_user(db_session, "owner", "version-owner@example.com")
-    await create_test_user(db_session, "other", "version-other@example.com")
     await create_test_user(db_session, "admin", "version-admin@example.com", is_admin=True)
 
     owner_token = await login(client, "owner")
-    other_token = await login(client, "other")
     admin_token = await login(client, "admin")
     plugin = await create_plugin(client, owner_token, admin_token, "version-target")
 
-    payload = {
-        "version": "1.1.0",
-        "changelog": "Initial release",
-        "download_url": "https://example.com/plugin.zip",
-    }
-
-    anonymous_create = await client.post(
-        f"/api/v1/plugins/{plugin['id']}/versions",
-        json=payload,
-    )
-    assert anonymous_create.status_code in {401, 403}
-
-    other_create = await client.post(
-        f"/api/v1/plugins/{plugin['id']}/versions",
-        headers={"Authorization": f"Bearer {other_token}"},
-        json=payload,
-    )
-    assert other_create.status_code == 403
-
-    owner_create = await client.post(
+    legacy_create = await client.post(
         f"/api/v1/plugins/{plugin['id']}/versions",
         headers={"Authorization": f"Bearer {owner_token}"},
-        json=payload,
+        json={"version": "1.1.0", "download_url": "https://example.com/plugin.zip"},
     )
-    assert owner_create.status_code == 201
-    version = owner_create.json()
+    assert legacy_create.status_code in {404, 405}
 
-    other_delete = await client.delete(
-        f"/api/v1/plugins/{plugin['id']}/versions/{version['id']}",
-        headers={"Authorization": f"Bearer {other_token}"},
-    )
-    assert other_delete.status_code == 403
-
-    admin_delete = await client.delete(
-        f"/api/v1/plugins/{plugin['id']}/versions/{version['id']}",
+    legacy_delete = await client.delete(
+        f"/api/v1/plugins/{plugin['id']}/versions/1",
         headers={"Authorization": f"Bearer {admin_token}"},
     )
-    assert admin_delete.status_code == 200
-
-
-async def test_version_can_store_trusted_release_provenance(
-    client: AsyncClient,
-    db_session: AsyncSession,
-):
-    await create_test_user(db_session, "trusted_owner", "trusted-version-owner@example.com")
-    await create_test_user(db_session, "trusted_admin", "trusted-version-admin@example.com", is_admin=True)
-
-    owner_token = await login(client, "trusted_owner")
-    admin_token = await login(client, "trusted_admin")
-    plugin = await create_plugin(client, owner_token, admin_token, "trusted-release")
-    package_hash = "A" * 64
-    payload_hash = "b" * 64
-
-    response = await client.post(
-        f"/api/v1/plugins/{plugin['id']}/versions",
-        headers={"Authorization": f"Bearer {owner_token}"},
-        json={
-            "version": "1.2.0",
-            "changelog": "Release checked by GitHub Actions",
-            "download_url": "https://github.com/example/lifekit/releases/download/v1.2.0/lifekit.neko-plugin",
-            "source_repo_url": "https://github.com/example/lifekit",
-            "source_commit": "1" * 40,
-            "release_tag": "v1.2.0",
-            "release_url": "https://github.com/example/lifekit/releases/tag/v1.2.0",
-            "actions_run_url": "https://github.com/example/lifekit/actions/runs/123",
-            "package_url": "https://github.com/example/lifekit/releases/download/v1.2.0/lifekit.neko-plugin",
-            "package_sha256": package_hash,
-            "payload_hash": payload_hash,
-            "neko_repo": "Project-N-E-K-O/N.E.K.O",
-            "neko_ref": "main",
-            "neko_commit": "2" * 40,
-            "verification_status": "passed",
-            "verification_summary": "release-check passed",
-        },
-    )
-
-    assert response.status_code == 201
-    version = response.json()
-    assert version["verification_status"] == "passed"
-    assert version["source_repo_url"] == "https://github.com/example/lifekit"
-    assert version["actions_run_url"].endswith("/123")
-    assert version["package_sha256"] == package_hash.lower()
-    assert version["payload_hash"] == payload_hash
-
-    latest = await client.get(f"/api/v1/plugins/{plugin['id']}/versions/latest")
-    assert latest.status_code == 200
-    assert latest.json()["release_tag"] == "v1.2.0"
-
-
-async def test_version_rejects_invalid_package_sha256(
-    client: AsyncClient,
-    db_session: AsyncSession,
-):
-    await create_test_user(db_session, "bad_hash_owner", "bad-hash-owner@example.com")
-    await create_test_user(db_session, "bad_hash_admin", "bad-hash-admin@example.com", is_admin=True)
-
-    owner_token = await login(client, "bad_hash_owner")
-    admin_token = await login(client, "bad_hash_admin")
-    plugin = await create_plugin(client, owner_token, admin_token, "bad-hash-release")
-
-    response = await client.post(
-        f"/api/v1/plugins/{plugin['id']}/versions",
-        headers={"Authorization": f"Bearer {owner_token}"},
-        json={
-            "version": "1.2.0",
-            "package_sha256": "not-a-sha256",
-            "verification_status": "passed",
-        },
-    )
-
-    assert response.status_code == 422
-
-
-async def test_version_create_rolls_back_when_plugin_sync_fails(
-    client: AsyncClient,
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    await create_test_user(db_session, "atomic_version_owner", "atomic-version-owner@example.com")
-    await create_test_user(db_session, "atomic_version_admin", "atomic-version-admin@example.com", is_admin=True)
-
-    owner_token = await login(client, "atomic_version_owner")
-    admin_token = await login(client, "atomic_version_admin")
-    plugin = await create_plugin(client, owner_token, admin_token, "atomic-version-create")
-
-    def fail_sync(*args, **kwargs):
-        raise RuntimeError("version sync boom")
-
-    monkeypatch.setattr(VersionService, "_sync_plugin_current_version", fail_sync)
-
-    with pytest.raises(RuntimeError, match="version sync boom"):
-        await client.post(
-            f"/api/v1/plugins/{plugin['id']}/versions",
-            headers={"Authorization": f"Bearer {owner_token}"},
-            json={
-                "version": "2.0.0",
-                "changelog": "Should rollback",
-                "download_url": "https://example.com/rollback.zip",
-            },
-        )
-
-    assert await db_session.scalar(
-        select(Version.id).where(
-            Version.plugin_id == plugin["id"],
-            Version.version == "2.0.0",
-        )
-    ) is None
-    db_plugin = await db_session.get(Plugin, plugin["id"])
-    assert db_plugin is not None
-    assert db_plugin.version == "1.0.0"
+    assert legacy_delete.status_code in {404, 405}

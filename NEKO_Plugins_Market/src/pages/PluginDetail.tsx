@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 import {
   Download,
   ThumbsUp,
@@ -24,11 +24,11 @@ import { marked } from 'marked';
 import 'highlight.js/styles/github-dark.css';
 import { pluginsApi } from '@/services/plugins';
 import { reviewsApi } from '@/services/reviews';
-import { versionsApi } from '@/services/versions';
 import { nekoBridge } from '@/lib/neko-bridge';
 import type { Plugin, Review } from '@/types';
-import type { PluginVersion } from '@/services/types';
+import type { PluginVersion, User as ApiUser } from '@/services/types';
 import { getErrorMessage, logError, notifySuccess, reportError } from '@/lib/error-reporting';
+import { VersionList } from '@/components/versions/VersionList';
 
 const ratingColors: Record<string, string> = {
   S: '#FFD700',
@@ -41,11 +41,15 @@ const ratingColors: Record<string, string> = {
 export function PluginDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('readme');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'versions' ? 'versions' : 'readme';
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const autoOpenPublish = searchParams.get('action') === 'publish';
   const [reviewContent, setReviewContent] = useState('');
   const [reviewTitle, setReviewTitle] = useState('');
   const [reviewRating, setReviewRating] = useState(5);
   const [plugin, setPlugin] = useState<Plugin | null>(null);
+  const [pluginAuthorId, setPluginAuthorId] = useState<number | null>(null);
   const [pluginReviews, setPluginReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
@@ -57,6 +61,18 @@ export function PluginDetail() {
   const [installMessage, setInstallMessage] = useState('');
   const [latestVersion, setLatestVersion] = useState<PluginVersion | null>(null);
   const zone = plugin ? getZoneById(plugin.zone) : undefined;
+
+  const currentUser = useMemo<ApiUser | null>(() => {
+    try {
+      const raw = localStorage.getItem('currentUser');
+      return raw ? (JSON.parse(raw) as ApiUser) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+  const canAuthorManage =
+    currentUser !== null && pluginAuthorId !== null && currentUser.id === pluginAuthorId;
+  const isAdmin = !!currentUser?.is_admin;
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -74,21 +90,34 @@ export function PluginDetail() {
       try {
         setIsLoading(true);
         setErrorMessage('');
+        const rawData = await pluginsApi.getRawById(id);
         const data = await pluginsApi.getById(id);
         const reviews = await reviewsApi.list(id);
-        // 并行拉取版本信息，失败不影响详情展示
-        let versions: PluginVersion[] = [];
-        try {
-          versions = await versionsApi.list(Number(id));
-        } catch {
-          versions = [];
-        }
+        // 不再单独拉版本列表填充 latestVersion —— Plugin 对象顶层
+        // 已经带 latest_version（由后端 attach_latest_version 投影）。
         if (isMounted) {
           setPlugin(data);
+          setPluginAuthorId(rawData.author_id);
           setPluginReviews(reviews.items);
-          if (versions.length > 0) {
-            const matched = versions.find((v) => v.version === data.version) || versions[0];
-            setLatestVersion(matched);
+          if (rawData.latest_version) {
+            setLatestVersion({
+              id: 0,
+              plugin_id: rawData.id,
+              version: rawData.latest_version.version,
+              channel: rawData.latest_version.channel,
+              is_latest: true,
+              yanked_at: null,
+              yanked_reason: null,
+              yanked_by: null,
+              published_by: null,
+              package_url: rawData.latest_version.package_url,
+              package_sha256: rawData.latest_version.package_sha256,
+              payload_hash: rawData.latest_version.payload_hash,
+              verification_status: 'passed',
+              created_at: rawData.latest_version.created_at,
+            });
+          } else {
+            setLatestVersion(null);
           }
         }
       } catch (error) {
@@ -267,7 +296,7 @@ export function PluginDetail() {
                   {zone?.name}
                 </Badge>
                 <span className="text-slate-500 text-sm font-mono">
-                  v{plugin.version}
+                  {plugin.version ? `v${plugin.version}` : '尚未发布版本'}
                 </span>
               </div>
 
@@ -453,6 +482,12 @@ export function PluginDetail() {
               README
             </TabsTrigger>
             <TabsTrigger
+              value="versions"
+              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-slate-400"
+            >
+              版本
+            </TabsTrigger>
+            <TabsTrigger
               value="ratings"
               className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-slate-400"
             >
@@ -471,6 +506,23 @@ export function PluginDetail() {
               <div
                 className="prose prose-invert max-w-none"
                 dangerouslySetInnerHTML={{ __html: readmeHtml }}
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="versions" className="mt-0">
+            <div className="bg-[#1A1A2E] border border-slate-800/50 rounded-2xl p-6 md:p-8">
+              <VersionList
+                pluginId={Number(plugin.id)}
+                canAuthorManage={canAuthorManage}
+                isAdmin={isAdmin}
+                autoOpenPublish={autoOpenPublish}
+                onAutoOpenConsumed={() => {
+                  // 消费完 ?action=publish 之后从 URL 上抹掉，避免刷新或返回时重复触发
+                  const next = new URLSearchParams(searchParams);
+                  next.delete('action');
+                  setSearchParams(next, { replace: true });
+                }}
               />
             </div>
           </TabsContent>

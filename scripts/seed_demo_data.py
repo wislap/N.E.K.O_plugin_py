@@ -135,10 +135,8 @@ async def upsert_plugin(db, plugin_data: dict, users: dict[str, User], zones: di
     plugin.name = plugin_data["name"]
     plugin.short_description = plugin_data["short_description"]
     plugin.description = plugin_data["description"]
-    plugin.version = "1.0.0"
     plugin.author_id = author.id
     plugin.author_name = author.username
-    plugin.download_url = f"{plugin_data['repo']}/releases/latest/download/plugin.zip"
     plugin.icon_url = None
     plugin.repo_url = plugin_data["repo"]
     plugin.repo_branch = "main"
@@ -171,8 +169,14 @@ async def upsert_plugin(db, plugin_data: dict, users: dict[str, User], zones: di
         Version(
             plugin_id=plugin.id,
             version="1.0.0",
+            channel="stable",
+            is_latest=True,
             changelog="Demo seed initial version.",
-            download_url=plugin.download_url,
+            download_url=f"{plugin_data['repo']}/releases/latest/download/plugin.zip",
+            package_url=f"{plugin_data['repo']}/releases/latest/download/plugin.zip",
+            package_sha256="",
+            verification_status="legacy_unverified",
+            published_by=author.id,
             min_app_version="1.0.0",
         )
     )

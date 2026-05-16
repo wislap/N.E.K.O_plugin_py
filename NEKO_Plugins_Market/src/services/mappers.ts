@@ -39,19 +39,23 @@ function githubProfile(repoUrl?: string | null) {
 export function toMarketPlugin(plugin: Plugin): MarketPlugin {
   const description = plugin.description ?? plugin.short_description ?? "";
   const rating = fallbackRating();
+  const latest = plugin.latest_version;
 
   return {
     id: String(plugin.id),
     name: plugin.name,
     description,
-    version: plugin.version,
+    // market-version-management spec：版本号与下载 URL 一律由 latest_version 决定。
+    // 没有 latest_version 时返回空字符串，前端 UI 应展示"暂无可下载版本"，
+    // **不再** fallback 到 repo_url（仓库主页不是合法插件包）。
+    version: latest?.version ?? "",
     author: {
       name: plugin.author_name,
       avatar: plugin.icon_url ?? "",
       github: githubProfile(plugin.repo_url)
     },
     githubRepo: plugin.repo_url ?? "",
-    downloadUrl: plugin.download_url ?? plugin.repo_url ?? "",
+    downloadUrl: latest?.package_url ?? "",
     zone: (plugin.zone_slug as MarketPlugin["zone"] | null) ?? zoneSlugFromId(plugin.zone_id),
     tags: plugin.tags ?? [],
     downloads: plugin.download_count,

@@ -10,6 +10,10 @@ from app.schemas.plugin import (
     PluginSearchParams, Plugin as PluginSchema
 )
 from app.schemas.common import PaginatedResponse, MessageResponse
+from app.services.plugin_projection import (
+    attach_latest_version,
+    attach_latest_version_single,
+)
 from app.services.plugin_service import PluginService
 from app.models.plugin import PluginStatus
 
@@ -51,6 +55,7 @@ async def list_plugins(
     )
     
     result = await PluginService.get_plugins(db, params, page, page_size)
+    await attach_latest_version(db, result.items)
     return result
 
 
@@ -63,6 +68,7 @@ async def get_featured_plugins(
     获取推荐插件列表
     """
     plugins = await PluginService.get_featured_plugins(db, limit)
+    await attach_latest_version(db, plugins)
     return plugins
 
 
@@ -75,6 +81,7 @@ async def get_popular_plugins(
     获取热门插件列表（按下载量排序）
     """
     plugins = await PluginService.get_popular_plugins(db, limit)
+    await attach_latest_version(db, plugins)
     return plugins
 
 
@@ -87,6 +94,7 @@ async def get_newest_plugins(
     获取最新插件列表
     """
     plugins = await PluginService.get_newest_plugins(db, limit)
+    await attach_latest_version(db, plugins)
     return plugins
 
 
@@ -99,6 +107,7 @@ async def get_my_plugins(
     获取当前用户提交的插件列表
     """
     plugins = await PluginService.get_plugins_by_author(db, current_user.id)
+    await attach_latest_version(db, plugins)
     return plugins
 
 
@@ -116,6 +125,7 @@ async def get_plugin(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="插件不存在或尚未发布"
         )
+    await attach_latest_version_single(db, plugin)
     return plugin
 
 
@@ -133,6 +143,7 @@ async def get_plugin_by_slug(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="插件不存在或尚未发布"
         )
+    await attach_latest_version_single(db, plugin)
     return plugin
 
 
@@ -161,6 +172,7 @@ async def update_plugin(
         )
     
     updated_plugin = await PluginService.update_plugin(db, plugin, update_data)
+    await attach_latest_version_single(db, updated_plugin)
     return updated_plugin
 
 

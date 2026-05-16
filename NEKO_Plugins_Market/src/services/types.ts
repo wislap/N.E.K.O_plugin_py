@@ -13,6 +13,15 @@ export interface User {
   updated_at?: string;
 }
 
+export interface LatestVersion {
+  version: string;
+  channel: "stable" | "beta";
+  package_url: string;
+  package_sha256: string;
+  payload_hash: string | null;
+  created_at: string;
+}
+
 export interface Plugin {
   id: number;
   name: string;
@@ -21,8 +30,9 @@ export interface Plugin {
   short_description?: string | null;
   author_id: number;
   author_name: string;
-  version: string;
-  download_url?: string | null;
+  // 注意：market-version-management 重构后不再有 version / download_url 顶层字段；
+  // 当前最新版统一通过 latest_version 子对象暴露，可能为 null。
+  latest_version: LatestVersion | null;
   icon_url?: string | null;
   repo_url?: string | null;
   readme?: string | null;
@@ -155,6 +165,12 @@ export interface PluginVersion {
   id: number;
   plugin_id: number;
   version: string;
+  channel: "stable" | "beta" | string;
+  is_latest: boolean;
+  yanked_at: string | null;
+  yanked_reason: string | null;
+  yanked_by: number | null;
+  published_by: number | null;
   changelog?: string | null;
   download_url?: string | null;
   min_app_version?: string | null;
@@ -175,25 +191,19 @@ export interface PluginVersion {
   created_at: string;
 }
 
-export interface PluginVersionCreateRequest {
-  version: string;
-  changelog?: string;
-  download_url?: string;
-  min_app_version?: string;
-  max_app_version?: string;
-  source_repo_url?: string;
-  source_commit?: string;
-  release_tag?: string;
-  release_url?: string;
-  actions_run_url?: string;
-  package_url?: string;
-  package_sha256?: string;
-  payload_hash?: string;
-  neko_repo?: string;
-  neko_ref?: string;
-  neko_commit?: string;
-  verification_status?: VerificationStatus;
-  verification_summary?: string;
+export interface VersionPublishRequest {
+  release_url: string;
+  channel?: "stable" | "beta";
+  changelog?: string | null;
+}
+
+export interface VersionYankRequest {
+  reason: string;
+}
+
+export interface VersionYankResponse {
+  yanked: PluginVersion;
+  promoted: PluginVersion | null;
 }
 
 export interface ReviewCreateRequest {

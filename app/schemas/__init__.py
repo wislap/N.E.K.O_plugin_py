@@ -2,7 +2,12 @@ from app.schemas.plugin import Plugin, PluginUpdate, PluginList, PluginDetail
 from app.schemas.category import Category, CategoryCreate, CategoryUpdate
 from app.schemas.user import User, UserCreate, UserUpdate, UserLogin
 from app.schemas.review import Review, ReviewCreate, ReviewUpdate
-from app.schemas.version import Version, VersionCreate
+from app.schemas.version import (
+    Version,
+    VersionPublishRequest,
+    VersionYankRequest,
+    VersionYankResponse,
+)
 from app.schemas.common import PaginatedResponse, MessageResponse
 
 __all__ = [
@@ -10,6 +15,9 @@ __all__ = [
     "Category", "CategoryCreate", "CategoryUpdate",
     "User", "UserCreate", "UserUpdate", "UserLogin",
     "Review", "ReviewCreate", "ReviewUpdate",
-    "Version", "VersionCreate",
+    "Version",
+    "VersionPublishRequest",
+    "VersionYankRequest",
+    "VersionYankResponse",
     "PaginatedResponse", "MessageResponse",
 ]

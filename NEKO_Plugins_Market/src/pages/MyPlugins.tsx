@@ -438,11 +438,19 @@ export function MyPlugins() {
                         查看详情
                       </Button>
                       {submission.plugin_id && submission.decision === 'approved' && (
-                        <Link to={`/plugin/${submission.plugin_id}`}>
-                          <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white">
-                            查看插件页
-                          </Button>
-                        </Link>
+                        <>
+                          <Link to={`/plugin/${submission.plugin_id}?tab=versions&action=publish`}>
+                            <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+                              <Plus className="mr-1.5 h-3.5 w-3.5" />
+                              发布新版本
+                            </Button>
+                          </Link>
+                          <Link to={`/plugin/${submission.plugin_id}`}>
+                            <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white">
+                              查看插件页
+                            </Button>
+                          </Link>
+                        </>
                       )}
                     </div>
                   </div>

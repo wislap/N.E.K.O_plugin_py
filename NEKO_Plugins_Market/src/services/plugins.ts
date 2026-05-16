@@ -32,6 +32,13 @@ export const pluginsApi = {
     return toMarketPlugin(data);
   },
 
+  /** 返回未经 mapper 转换的 raw plugin 对象（保留 author_id / latest_version 等服务端字段）。
+   *  用于需要权限判断或读取版本元数据的页面（如 PluginDetail 版本 tab）。
+   */
+  async getRawById(id: string) {
+    return request<Plugin>(`/plugins/${id}`);
+  },
+
   mine() {
     return request<Plugin[]>("/plugins/mine");
   },

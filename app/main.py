@@ -1,9 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
+from app.errors.version_errors import VersionDomainError, ERROR_CODE_TO_HTTP
 from app.routers import plugins, categories, users, reviews, versions, auth, signatures, zones, notifications, submissions
 from app.routers.oauth import router as oauth_router
 from app.routers.admin import categories as admin_categories
@@ -45,6 +47,21 @@ app = FastAPI(
 )
 
 app.middleware("http")(request_id_middleware)
+
+
+@app.exception_handler(VersionDomainError)
+async def _version_domain_exception_handler(request, exc: VersionDomainError):
+    """统一处理版本管理子系统抛出的领域错误。
+
+    `ReleaseFetchError` 继承 `VersionDomainError`，由同一个 handler 兜住。
+    未在 `ERROR_CODE_TO_HTTP` 注册的 code 视为内部错误，回落到 500。
+    """
+    http_status = ERROR_CODE_TO_HTTP.get(exc.code, 500)
+    return JSONResponse(
+        status_code=http_status,
+        content={"detail": exc.message, "code": exc.code},
+    )
+
 
 # 配置 CORS
 app.add_middleware(

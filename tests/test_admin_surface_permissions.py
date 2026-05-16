@@ -460,7 +460,6 @@ async def test_dashboard_stats_are_scoped_by_permission(
             slug="approved-dashboard-plugin",
             author_id=owner.id,
             author_name=owner.username,
-            version="1.0.0",
             status=PluginStatus.APPROVED,
         ),
     ])

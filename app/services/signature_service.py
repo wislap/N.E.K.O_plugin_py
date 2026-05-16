@@ -170,6 +170,35 @@ class SignatureService:
         
         # 从 GitHub 拉取 Python 文件
         try:
+            # 当前版本号已不再存放在 plugins.version 列；改为查最新发布版本。
+            # （market-version-management spec 重构：单一可信源在 versions 表）
+            from app.models.version import Version
+            from sqlalchemy import select, desc
+
+            latest_version_row = await db.execute(
+                select(Version)
+                .where(
+                    Version.plugin_id == plugin_id,
+                    Version.is_latest.is_(True),
+                    Version.yanked_at.is_(None),
+                    Version.channel == "stable",
+                )
+                .limit(1)
+            )
+            latest_version = latest_version_row.scalar_one_or_none()
+            if latest_version is None:
+                # 退化路径：取该插件 created_at desc 第一条
+                fallback_row = await db.execute(
+                    select(Version)
+                    .where(Version.plugin_id == plugin_id)
+                    .order_by(desc(Version.created_at))
+                    .limit(1)
+                )
+                latest_version = fallback_row.scalar_one_or_none()
+            if latest_version is None:
+                raise ValueError("插件尚无任何已发布版本，无法签名")
+            current_version_str = latest_version.version
+
             tree = await self.github_service.get_repo_tree(
                 plugin.repo_url,
                 recursive=True,
@@ -205,7 +234,7 @@ class SignatureService:
             sign_result = self.crypto_service.sign_plugin(
                 private_key_pem=keypair.private_key_encrypted,
                 plugin_name=plugin.name,
-                version=plugin.version,
+                version=current_version_str,
                 author=plugin.author_name,
                 repo_url=plugin.repo_url,
                 files=files
@@ -220,7 +249,7 @@ class SignatureService:
                 files_md5=sign_result["files_md5"],
                 payload=sign_result["payload"],
                 plugin_name=plugin.name,
-                version=plugin.version,
+                version=current_version_str,
                 author=plugin.author_name,
                 repo_url=plugin.repo_url,
                 is_valid=True
