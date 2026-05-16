@@ -24,8 +24,10 @@ import { marked } from 'marked';
 import 'highlight.js/styles/github-dark.css';
 import { pluginsApi } from '@/services/plugins';
 import { reviewsApi } from '@/services/reviews';
+import { versionsApi } from '@/services/versions';
 import { nekoBridge } from '@/lib/neko-bridge';
 import type { Plugin, Review } from '@/types';
+import type { PluginVersion } from '@/services/types';
 import { getErrorMessage, logError, notifySuccess, reportError } from '@/lib/error-reporting';
 
 const ratingColors: Record<string, string> = {
@@ -53,6 +55,7 @@ export function PluginDetail() {
   const [nekoOnline, setNekoOnline] = useState<boolean | null>(null);
   const [installStatus, setInstallStatus] = useState<'idle' | 'installing' | 'success' | 'error'>('idle');
   const [installMessage, setInstallMessage] = useState('');
+  const [latestVersion, setLatestVersion] = useState<PluginVersion | null>(null);
   const zone = plugin ? getZoneById(plugin.zone) : undefined;
 
   useEffect(() => {
@@ -73,9 +76,20 @@ export function PluginDetail() {
         setErrorMessage('');
         const data = await pluginsApi.getById(id);
         const reviews = await reviewsApi.list(id);
+        // 并行拉取版本信息，失败不影响详情展示
+        let versions: PluginVersion[] = [];
+        try {
+          versions = await versionsApi.list(Number(id));
+        } catch {
+          versions = [];
+        }
         if (isMounted) {
           setPlugin(data);
           setPluginReviews(reviews.items);
+          if (versions.length > 0) {
+            const matched = versions.find((v) => v.version === data.version) || versions[0];
+            setLatestVersion(matched);
+          }
         }
       } catch (error) {
         if (isMounted) {
@@ -347,12 +361,14 @@ export function PluginDetail() {
                     // 一键安装到本地 N.E.K.O
                     setInstallStatus('installing');
                     setInstallMessage('正在安装...');
+                    const packageUrl = latestVersion?.package_url || latestVersion?.download_url || plugin.downloadUrl || plugin.githubRepo || '';
                     const taskId = await nekoBridge.install(
                       {
-                        package_url: plugin.downloadUrl || plugin.githubRepo || '',
-                        package_sha256: '', // TODO: 从 version 数据获取
+                        package_url: packageUrl,
+                        package_sha256: latestVersion?.package_sha256 || '',
+                        payload_hash: latestVersion?.payload_hash || undefined,
                         plugin_id: String(plugin.id),
-                        version: plugin.version,
+                        version: latestVersion?.version || plugin.version,
                       },
                       (task) => {
                         setInstallMessage(task.message);

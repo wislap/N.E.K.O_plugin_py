@@ -27,7 +27,8 @@ export interface BridgeStatus {
 
 export interface InstallRequest {
   package_url: string
-  package_sha256: string
+  /** 包文件 SHA256；留空或全 0 时后端会跳过校验（仅建议 Market 尚未生成 hash 时使用） */
+  package_sha256?: string
   payload_hash?: string
   plugin_id?: string
   version?: string
@@ -276,7 +277,7 @@ class NekoBridge {
   private _fallbackUriScheme(request: InstallRequest): void {
     const params = new URLSearchParams()
     params.set("url", request.package_url)
-    params.set("sha256", request.package_sha256)
+    if (request.package_sha256) params.set("sha256", request.package_sha256)
     if (request.plugin_id) params.set("id", request.plugin_id)
     if (request.version) params.set("version", request.version)
     if (request.payload_hash) params.set("payload_hash", request.payload_hash)
