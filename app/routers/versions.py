@@ -13,10 +13,13 @@
 from __future__ import annotations
 
 from typing import List, Literal, Optional
+from urllib.parse import urlparse
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.errors.version_errors import VersionDomainError
@@ -24,6 +27,7 @@ from app.models.plugin import Plugin
 from app.models.user import User
 from app.schemas.version import (
     Version as VersionSchema,
+    VersionReleaseCandidate,
     VersionPublishRequest,
     VersionYankRequest,
     VersionYankResponse,
@@ -42,6 +46,36 @@ async def _ensure_plugin(db: AsyncSession, plugin_id: int) -> Plugin:
             detail="插件不存在",
         )
     return plugin
+
+
+def _ensure_can_manage_versions(plugin: Plugin, actor: User) -> None:
+    if actor.id == plugin.author_id or bool(getattr(actor, "is_admin", False)):
+        return
+    raise VersionDomainError("forbidden", "没有权限管理此插件的版本")
+
+
+def _parse_github_repo(repo_url: str | None) -> tuple[str, str]:
+    if not repo_url:
+        raise VersionDomainError("release_repo_mismatch", "插件未配置 GitHub 仓库地址")
+    parsed = urlparse(repo_url)
+    if parsed.netloc.lower() not in {"github.com", "www.github.com"}:
+        raise VersionDomainError("release_repo_mismatch", "插件仓库不是 GitHub 地址")
+    parts = [part for part in parsed.path.strip("/").split("/") if part]
+    if len(parts) < 2:
+        raise VersionDomainError("release_repo_mismatch", "无法解析插件 GitHub 仓库")
+    repo = parts[1][:-4] if parts[1].endswith(".git") else parts[1]
+    return parts[0], repo
+
+
+def _github_headers() -> dict[str, str]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "N.E.KO-Plugin-Market",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if settings.GITHUB_TOKEN:
+        headers["Authorization"] = f"token {settings.GITHUB_TOKEN}"
+    return headers
 
 
 @router.get(
@@ -65,6 +99,58 @@ async def list_plugin_versions(
         channel=channel,
         include_yanked=include_yanked,
     )
+
+
+@router.get(
+    "/plugins/{plugin_id}/versions/release-candidates",
+    response_model=List[VersionReleaseCandidate],
+)
+async def list_release_candidates(
+    plugin_id: int,
+    limit: int = Query(default=10, ge=1, le=30),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """列出插件 GitHub 仓库最近的 releases，用于前端自动填充发版 URL。"""
+    plugin = await _ensure_plugin(db, plugin_id)
+    _ensure_can_manage_versions(plugin, current_user)
+    owner, repo = _parse_github_repo(plugin.repo_url)
+    api_url = f"https://api.github.com/repos/{owner}/{repo}/releases"
+
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        response = await client.get(
+            api_url,
+            headers=_github_headers(),
+            params={"per_page": limit},
+        )
+    if response.status_code == 404:
+        return []
+    if response.status_code >= 400:
+        raise VersionDomainError(
+            "release_publish_failed",
+            f"GitHub release 列表接口返回 {response.status_code}",
+        )
+
+    candidates: list[VersionReleaseCandidate] = []
+    for item in response.json():
+        assets = item.get("assets") or []
+        asset_names = [str(asset.get("name") or "") for asset in assets]
+        candidates.append(
+            VersionReleaseCandidate(
+                tag_name=str(item.get("tag_name") or ""),
+                name=item.get("name"),
+                release_url=str(item.get("html_url") or ""),
+                published_at=item.get("published_at"),
+                draft=bool(item.get("draft")),
+                prerelease=bool(item.get("prerelease")),
+                asset_names=asset_names,
+                has_package_asset=any(
+                    name.lower().endswith((".neko-plugin", ".neko-bundle"))
+                    for name in asset_names
+                ),
+            )
+        )
+    return [candidate for candidate in candidates if candidate.release_url and candidate.tag_name]
 
 
 

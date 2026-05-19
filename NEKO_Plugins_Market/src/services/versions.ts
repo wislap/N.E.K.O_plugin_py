@@ -1,6 +1,7 @@
 import { post, request } from "./http/client";
 import type {
   PluginVersion,
+  VersionReleaseCandidate,
   VersionPublishRequest,
   VersionYankRequest,
   VersionYankResponse
@@ -60,6 +61,10 @@ export const versionsApi = {
 
   latest(pluginId: number, channel: "stable" | "beta" = "stable") {
     return request<PluginVersion>(`/plugins/${pluginId}/versions/latest?channel=${channel}`);
+  },
+
+  releaseCandidates(pluginId: number) {
+    return request<VersionReleaseCandidate[]>(`/plugins/${pluginId}/versions/release-candidates`);
   },
 
   publishFromRelease(pluginId: number, body: VersionPublishRequest) {

@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -25,6 +25,17 @@ class VersionPublishRequest(BaseModel):
     release_url: str = Field(..., max_length=500)
     channel: ChannelLiteral = "stable"
     changelog: Optional[str] = None
+
+
+class VersionReleaseCandidate(BaseModel):
+    tag_name: str
+    name: Optional[str] = None
+    release_url: str
+    published_at: Optional[datetime] = None
+    draft: bool = False
+    prerelease: bool = False
+    asset_names: List[str] = []
+    has_package_asset: bool = False
 
 
 class VersionYankRequest(BaseModel):

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { getVersionErrorMessage, versionsApi } from "@/services/versions";
 import { reportError } from "@/lib/error-reporting";
+import type { VersionReleaseCandidate } from "@/services/types";
 
 const RELEASE_URL_PATTERN =
   /^https?:\/\/github\.com\/[^/]+\/[^/]+\/releases\/(?:tag\/[^/?#]+|\d+)\/?$/i;
@@ -42,16 +43,63 @@ export function PublishFromReleaseDialog({
   const [channel, setChannel] = useState<"stable" | "beta">("stable");
   const [changelog, setChangelog] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [loadingCandidates, setLoadingCandidates] = useState(false);
+  const [candidates, setCandidates] = useState<VersionReleaseCandidate[]>([]);
+  const [candidateError, setCandidateError] = useState("");
   const [validationError, setValidationError] = useState("");
+
+  const packageCandidates = candidates.filter((item) => item.has_package_asset);
 
   function reset() {
     setReleaseUrl("");
     setChannel("stable");
     setChangelog("");
     setSubmitting(false);
+    setLoadingCandidates(false);
+    setCandidates([]);
+    setCandidateError("");
     setValidationError("");
   }
 
+  async function loadReleaseCandidates() {
+    setLoadingCandidates(true);
+    setCandidateError("");
+    try {
+      const items = await versionsApi.releaseCandidates(pluginId);
+      setCandidates(items);
+      const firstPackageRelease = items.find((item) => item.has_package_asset);
+      if (firstPackageRelease) {
+        setReleaseUrl(firstPackageRelease.release_url);
+        if (firstPackageRelease.prerelease) {
+          setChannel("beta");
+        }
+      } else if (items.length > 0) {
+        setCandidateError("找到了 GitHub Release，但没有包含 .neko-plugin / .neko-bundle 的资产。");
+      } else {
+        setCandidateError("没有找到 GitHub Release。请先推送 v* 标签并等待 release.yml 完成。");
+      }
+    } catch (err) {
+      const message = getVersionErrorMessage(err, "自动获取 GitHub Release 失败");
+      setCandidateError(message);
+      reportError(err, {
+        title: "自动获取 GitHub Release 失败",
+        severity: "warn",
+        context: {
+          module: "publishFromRelease",
+          action: "releaseCandidates",
+          pluginId,
+        },
+      });
+    } finally {
+      setLoadingCandidates(false);
+    }
+  }
+
+  useEffect(() => {
+    if (open) {
+      void loadReleaseCandidates();
+    }
+  }, [open, pluginId]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -110,6 +158,41 @@ export function PublishFromReleaseDialog({
         <form className="space-y-4" onSubmit={onSubmit}>
           <div className="space-y-1.5">
             <Label htmlFor="release_url">GitHub Release URL</Label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Select
+                value={packageCandidates.find((item) => item.release_url === releaseUrl)?.release_url ?? ""}
+                onValueChange={(value) => {
+                  const selected = candidates.find((item) => item.release_url === value);
+                  setReleaseUrl(value);
+                  if (selected?.prerelease) {
+                    setChannel("beta");
+                  }
+                }}
+                disabled={loadingCandidates || packageCandidates.length === 0}
+              >
+                <SelectTrigger className="bg-[#0F0F1A] border-slate-700 text-slate-200 sm:w-[220px]">
+                  <SelectValue
+                    placeholder={loadingCandidates ? "正在获取 Release..." : "选择 Release"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {packageCandidates.map((item) => (
+                    <SelectItem key={item.release_url} value={item.release_url}>
+                      {item.tag_name}{item.prerelease ? "（beta）" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => loadReleaseCandidates()}
+                disabled={loadingCandidates || submitting}
+                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+              >
+                {loadingCandidates ? "获取中..." : "重新获取"}
+              </Button>
+            </div>
             <Input
               id="release_url"
               type="url"
@@ -119,6 +202,14 @@ export function PublishFromReleaseDialog({
               onChange={(e) => setReleaseUrl(e.target.value)}
               className="bg-[#0F0F1A] border-slate-700 text-slate-200"
             />
+            {candidateError && (
+              <p className="text-xs text-amber-300">{candidateError}</p>
+            )}
+            {packageCandidates.length > 0 && !candidateError && (
+              <p className="text-xs text-slate-500">
+                已自动读取 {packageCandidates.length} 个包含插件包资产的 GitHub Release，可直接选择或手动修改 URL。
+              </p>
+            )}
             {validationError && (
               <p className="text-xs text-red-400">{validationError}</p>
             )}

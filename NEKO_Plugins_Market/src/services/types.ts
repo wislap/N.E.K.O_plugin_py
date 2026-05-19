@@ -197,6 +197,17 @@ export interface VersionPublishRequest {
   changelog?: string | null;
 }
 
+export interface VersionReleaseCandidate {
+  tag_name: string;
+  name?: string | null;
+  release_url: string;
+  published_at?: string | null;
+  draft: boolean;
+  prerelease: boolean;
+  asset_names: string[];
+  has_package_asset: boolean;
+}
+
 export interface VersionYankRequest {
   reason: string;
 }
