@@ -57,7 +57,8 @@ export function Upload() {
   const trimmedGithubUrl = githubUrl.trim();
   const repoName = trimmedGithubUrl.match(/^https:\/\/github\.com\/[^/\s]+\/([^/\s?#]+)\/?$/i)?.[1] ?? '';
   const isGithubRepoUrl = /^https:\/\/github\.com\/[^/\s]+\/[^/\s?#]+\/?$/i.test(trimmedGithubUrl);
-  const hasValidRepoName = repoName ? /^n\.e\.k\.o_plugin_[a-z0-9][a-z0-9_-]*$/i.test(repoName) : false;
+  const hasValidRepoName = repoName ? /^n\.e\.k\.o_plugin_[a-z_][a-z0-9_]*$/.test(repoName) : false;
+  const repoPluginId = hasValidRepoName ? repoName.replace(/^n\.e\.k\.o_plugin_/, '') : '';
 
   useEffect(() => {
     if (!hasUploadAccess) {
@@ -166,8 +167,10 @@ export function Upload() {
             <div>
               <h3 className="text-blue-400 font-medium mb-1">提交须知</h3>
               <ul className="text-sm text-slate-400 space-y-1">
-                <li>• 插件必须托管在 GitHub 上，仓库名格式为 n.e.k.o_plugin_xxx</li>
-                <li>• 申请会先进入待审核队列，通过后才会发布为市场插件</li>
+                <li>• 插件必须是独立 GitHub 仓库，仓库名固定为 n.e.k.o_plugin_&lt;plugin_id&gt;</li>
+                <li>• 推荐使用 neko-plugin init-repo &lt;plugin_id&gt; 生成仓库骨架</li>
+                <li>• 推送 v* 标签后，release.yml 会上传 .neko-plugin 到 GitHub Release</li>
+                <li>• 审核通过后，还需要用 GitHub Release URL 发布首个可安装版本</li>
                 <li>• 审核员会围绕代码、命名、描述、仓库可信度留下意见</li>
                 <li>• 你可以在“我的插件”里持续查看申请状态</li>
               </ul>
@@ -212,14 +215,23 @@ export function Upload() {
                 />
                 {trimmedGithubUrl && (!isGithubRepoUrl || !hasValidRepoName) && (
                   <p className="mt-2 text-sm text-red-300">
-                    请输入 GitHub 仓库地址，仓库名需要符合 n.e.k.o_plugin_xxx。
+                    请输入 GitHub 仓库地址，仓库名需要符合 n.e.k.o_plugin_&lt;plugin_id&gt;，plugin_id 只能包含小写字母、数字和下划线，且不能以数字开头。
                   </p>
                 )}
                 {hasValidRepoName && (
                   <p className="mt-2 text-sm text-green-300">
-                    仓库命名符合提交规则。
+                    仓库命名符合提交规则，对应 plugin_id: {repoPluginId}
                   </p>
                 )}
+                <div className="mt-4 rounded-xl border border-slate-800 bg-[#0F0F1A] p-4 text-sm text-slate-400">
+                  <p className="mb-2 text-slate-300">推荐准备流程：</p>
+                  <pre className="whitespace-pre-wrap font-mono text-xs leading-5 text-slate-300">
+{`neko-plugin init-repo ${repoPluginId || '<plugin_id>'}
+git remote add origin https://github.com/<owner>/n.e.k.o_plugin_${repoPluginId || '<plugin_id>'}
+git tag v0.1.0
+git push origin v0.1.0`}
+                  </pre>
+                </div>
               </div>
             </div>
           </div>
@@ -368,19 +380,19 @@ export function Upload() {
             <ul className="space-y-2 text-slate-400">
               <li className="flex items-start gap-2">
                 <CheckCircle className="w-4 h-4 text-green-500 mt-1" />
-                <span>仓库源码公开可读</span>
+                <span>仓库名是 n.e.k.o_plugin_&lt;plugin_id&gt;，plugin.toml 中的 id 与后缀一致</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle className="w-4 h-4 text-green-500 mt-1" />
-                <span>README 描述清楚插件用途</span>
+                <span>根目录包含 plugin.toml、README.md、pyproject.toml 和测试文件</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle className="w-4 h-4 text-green-500 mt-1" />
-                <span>配置文件、入口点和包结构完整</span>
+                <span>.github/workflows/release.yml 已生成，并能通过 check -r --market-release</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle className="w-4 h-4 text-green-500 mt-1" />
-                <span>Release 或构建记录可以证明插件可打包</span>
+                <span>GitHub Release assets 中已有 &lt;plugin_id&gt;.neko-plugin</span>
               </li>
             </ul>
           </div>
@@ -411,7 +423,7 @@ export function Upload() {
                 <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center mt-0.5">
                   4
                 </span>
-                <span>通过后发布为市场插件</span>
+                <span>通过后填 GitHub Release URL，发布首个 stable 版本</span>
               </li>
             </ul>
           </div>
