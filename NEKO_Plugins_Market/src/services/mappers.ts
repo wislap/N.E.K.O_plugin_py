@@ -43,6 +43,7 @@ export function toMarketPlugin(plugin: Plugin): MarketPlugin {
 
   return {
     id: String(plugin.id),
+    slug: plugin.slug,
     name: plugin.name,
     description,
     // market-version-management spec：版本号与下载 URL 一律由 latest_version 决定。

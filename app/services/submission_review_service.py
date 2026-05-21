@@ -34,7 +34,7 @@ from app.schemas.plugin_submission import (
     SubmissionRevisionCreate,
 )
 from app.services.transactions import commit_or_rollback
-from app.utils.plugin_validator import validate_plugin_repo
+from app.utils.plugin_validator import PluginValidator, validate_plugin_repo
 
 
 @dataclass(frozen=True)
@@ -64,6 +64,7 @@ class SubmissionReviewService:
         data: SubmissionDraftCreate,
     ) -> PluginSubmission:
         self._validate_repo(data.repo_url)
+        self._validate_slug_matches_repo(data.repo_url, data.plugin_slug)
         async with commit_or_rollback(db):
             submission = PluginSubmission(author_id=author_id, status=SubmissionStatus.DRAFT)
             db.add(submission)
@@ -112,6 +113,7 @@ class SubmissionReviewService:
             metadata=data.metadata if data.metadata is not None else dict(base.snapshot_metadata or {}),
         )
         self._validate_repo(merged.repo_url)
+        self._validate_slug_matches_repo(merged.repo_url, merged.plugin_slug)
 
         next_revision = len(submission.snapshots or []) + 1
         async with commit_or_rollback(db):
@@ -160,6 +162,7 @@ class SubmissionReviewService:
             metadata=data.metadata if data.metadata is not None else dict(base.snapshot_metadata or {}),
         )
         self._validate_repo(merged.repo_url)
+        self._validate_slug_matches_repo(merged.repo_url, merged.plugin_slug)
 
         next_revision = len(submission.snapshots or []) + 1
         async with commit_or_rollback(db):
@@ -214,6 +217,9 @@ class SubmissionReviewService:
             raise ValueError("只有草稿可以正式提交")
         if submission.current_snapshot is None:
             raise ValueError("申请缺少提交快照")
+        snap = submission.current_snapshot
+        self._validate_repo(snap.repo_url)
+        self._validate_slug_matches_repo(snap.repo_url, snap.plugin_slug)
         async with commit_or_rollback(db):
             submission.status = SubmissionStatus.SUBMITTED
             submission.submitted_at = utc_now()
@@ -750,6 +756,19 @@ class SubmissionReviewService:
         if len(parts) < 2:
             return None, None
         return parts[0], parts[1].removesuffix(".git")
+
+    @staticmethod
+    def _validate_slug_matches_repo(repo_url: str, plugin_slug: str) -> None:
+        _, repo = SubmissionReviewService._parse_github_repo(repo_url)
+        if not repo:
+            raise ValueError("无法从仓库地址解析插件仓库名")
+        expected = PluginValidator.extract_plugin_name(repo)
+        if not expected:
+            raise ValueError("仓库名不符合 n.e.k.o_plugin_<plugin_id> 规范")
+        if plugin_slug != expected:
+            raise ValueError(
+                f"插件 slug 必须与仓库 plugin_id 一致，应为 '{expected}'，当前为 '{plugin_slug}'"
+            )
 
     @staticmethod
     def _validate_repo(repo_url: str) -> None:

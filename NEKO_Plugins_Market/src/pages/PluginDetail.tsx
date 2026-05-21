@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 // RatingBadge component removed - ratings now displayed inline
 import { formatDate, formatNumber, getZoneById } from '@/lib/utils';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import 'highlight.js/styles/github-dark.css';
 import { pluginsApi } from '@/services/plugins';
 import { reviewsApi } from '@/services/reviews';
@@ -61,6 +62,9 @@ export function PluginDetail() {
   const [installMessage, setInstallMessage] = useState('');
   const [latestVersion, setLatestVersion] = useState<PluginVersion | null>(null);
   const zone = plugin ? getZoneById(plugin.zone) : undefined;
+  const installablePackageUrl = latestVersion?.package_url?.trim() || '';
+  const installablePackageSha256 = latestVersion?.package_sha256?.trim() || '';
+  const canInstallVerifiedPackage = Boolean(installablePackageUrl && installablePackageSha256);
 
   const currentUser = useMemo<ApiUser | null>(() => {
     try {
@@ -260,7 +264,9 @@ export function PluginDetail() {
     );
   }
 
-  const readmeHtml = marked(plugin.readme);
+  const readmeHtml = DOMPurify.sanitize(
+    marked.parse(plugin.readme, { async: false }) as string,
+  );
 
   return (
     <main className="min-h-screen bg-[#0F0F1A] pt-24 pb-20">
@@ -386,17 +392,17 @@ export function PluginDetail() {
                 onClick={async () => {
                   if (!plugin) return;
 
-                  if (nekoOnline && nekoBridge.hasToken) {
+                  if (nekoOnline && nekoBridge.hasToken && canInstallVerifiedPackage) {
                     // 一键安装到本地 N.E.K.O
                     setInstallStatus('installing');
                     setInstallMessage('正在安装...');
-                    const packageUrl = latestVersion?.package_url || latestVersion?.download_url || plugin.downloadUrl || plugin.githubRepo || '';
                     const taskId = await nekoBridge.install(
                       {
-                        package_url: packageUrl,
-                        package_sha256: latestVersion?.package_sha256 || '',
+                        package_url: installablePackageUrl,
+                        package_sha256: installablePackageSha256,
                         payload_hash: latestVersion?.payload_hash || undefined,
                         plugin_id: String(plugin.id),
+                        expected_plugin_toml_id: plugin.slug,
                         version: latestVersion?.version || plugin.version,
                       },
                       (task) => {
@@ -417,12 +423,15 @@ export function PluginDetail() {
                       setInstallStatus('idle');
                       handleDownload();
                     }
+                  } else if (!canInstallVerifiedPackage) {
+                    setInstallStatus('error');
+                    setInstallMessage('暂无可验证的安装包版本，请前往源码页查看。');
                   } else {
                     // 没有连接 N.E.K.O，走原有下载逻辑
                     handleDownload();
                   }
                 }}
-                disabled={isDownloading || installStatus === 'installing'}
+                disabled={isDownloading || installStatus === 'installing' || !canInstallVerifiedPackage}
               >
                 {installStatus === 'installing' ? (
                   <>
@@ -433,6 +442,11 @@ export function PluginDetail() {
                   <>
                     <Plug className="w-5 h-5 mr-2" />
                     ✓ 已安装
+                  </>
+                ) : !canInstallVerifiedPackage ? (
+                  <>
+                    <Download className="w-5 h-5 mr-2" />
+                    暂无可安装版本
                   </>
                 ) : nekoOnline ? (
                   <>

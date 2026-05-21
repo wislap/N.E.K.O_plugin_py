@@ -13,6 +13,7 @@ export interface Rating {
 
 export interface Plugin {
   id: string;
+  slug: string;
   name: string;
   description: string;
   version: string;

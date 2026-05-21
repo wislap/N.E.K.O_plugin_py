@@ -59,6 +59,7 @@ export function Upload() {
   const isGithubRepoUrl = /^https:\/\/github\.com\/[^/\s]+\/[^/\s?#]+\/?$/i.test(trimmedGithubUrl);
   const hasValidRepoName = repoName ? /^n\.e\.k\.o_plugin_[a-z_][a-z0-9_]*$/.test(repoName) : false;
   const repoPluginId = hasValidRepoName ? repoName.replace(/^n\.e\.k\.o_plugin_/, '') : '';
+  const pluginSlug = repoPluginId || slugify(pluginName);
 
   useEffect(() => {
     if (!hasUploadAccess) {
@@ -85,7 +86,7 @@ export function Upload() {
     try {
       const submission = await submissionsApi.createAndSubmit({
         plugin_name: pluginName.trim(),
-        plugin_slug: slugify(pluginName),
+        plugin_slug: pluginSlug,
         description: description.trim() || undefined,
         short_description: description.trim().slice(0, 255) || undefined,
         repo_url: githubUrl.trim(),
@@ -263,7 +264,12 @@ git push origin v0.1.0`}
                 />
                 {pluginName.trim() && (
                   <p className="mt-2 text-sm text-slate-500">
-                    申请 slug: {slugify(pluginName) || '-'}
+                    市场 slug / plugin.toml id: {pluginSlug || '-'}
+                  </p>
+                )}
+                {repoPluginId && slugify(pluginName) && slugify(pluginName) !== repoPluginId && (
+                  <p className="mt-2 text-sm text-amber-400">
+                    展示名称可与 slug 不同；安装与识别以仓库 plugin_id「{repoPluginId}」为准。
                   </p>
                 )}
               </div>

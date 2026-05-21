@@ -31,6 +31,7 @@ export interface InstallRequest {
   package_sha256?: string
   payload_hash?: string
   plugin_id?: string
+  expected_plugin_toml_id?: string
   version?: string
   on_conflict?: "rename" | "fail"
 }
@@ -279,6 +280,9 @@ class NekoBridge {
     params.set("url", request.package_url)
     if (request.package_sha256) params.set("sha256", request.package_sha256)
     if (request.plugin_id) params.set("id", request.plugin_id)
+    if (request.expected_plugin_toml_id) {
+      params.set("expected_plugin_toml_id", request.expected_plugin_toml_id)
+    }
     if (request.version) params.set("version", request.version)
     if (request.payload_hash) params.set("payload_hash", request.payload_hash)
 

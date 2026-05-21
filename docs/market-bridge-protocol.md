@@ -129,11 +129,20 @@ Status 值: `pending` → `downloading` → `verifying` → `installing` → `co
 ### Bridge Token
 
 - 每次 N.E.K.O 启动时生成随机 token
-- 写入 `~/.neko/bridge.json`：`{"token": "...", "port": 48911}`
+- 写入 `~/.neko/bridge.json`，文件权限应为仅 owner 可读写（`0600`）：
+  `{"token": "...", "port": 48911, "one_time_code": "...", "one_time_code_expires_in": 300}`
 - Market 前端通过以下方式获取 token：
-  1. 用户在 N.E.K.O 面板点"连接市场" → 生成一次性码 → 用户粘贴到 Market 网页
+  1. 用户在 N.E.K.O 面板点"连接市场" → 生成短期一次性码 → 用户粘贴到 Market 网页
   2. 或通过 `neko://pair?code=xxx` URI 自动传递
 - Token 存储在 localStorage，重启 N.E.K.O 后需要重新配对
+- 一次性码仅存在本地内存中，默认 5 分钟过期，成功交换后立即失效
+
+### 安装包可信度
+
+- Market 一键安装只应使用 `latest_version.package_url` 和 `latest_version.package_sha256`
+- `package_url` 必须指向真实 `.neko-plugin` / `.neko-bundle` 资产，不能 fallback 到仓库主页
+- 没有 `package_sha256` 的版本只能展示为“暂无可安装版本”或让用户前往源码页手动处理
+- `plugin_id` 表示 Market 数据库 ID；如需校验包内 `plugin.toml` 身份，应额外传 `expected_plugin_toml_id`
 
 ### 为什么不只用 CORS？
 
