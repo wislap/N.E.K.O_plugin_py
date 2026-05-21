@@ -13,6 +13,7 @@ const Plugins = lazy(() => import('@/pages/Plugins').then((module) => ({ default
 const PluginDetail = lazy(() => import('@/pages/PluginDetail').then((module) => ({ default: module.PluginDetail })));
 const Upload = lazy(() => import('@/pages/Upload').then((module) => ({ default: module.Upload })));
 const Auth = lazy(() => import('@/pages/Auth').then((module) => ({ default: module.Auth })));
+const OAuthAuthorize = lazy(() => import('@/pages/OAuthAuthorize').then((module) => ({ default: module.OAuthAuthorize })));
 const VerifyEmail = lazy(() => import('@/pages/VerifyEmail').then((module) => ({ default: module.VerifyEmail })));
 const MyPlugins = lazy(() => import('@/pages/MyPlugins').then((module) => ({ default: module.MyPlugins })));
 const AdminApp = lazy(() => import('@/admin/AdminApp').then((module) => ({ default: module.AdminApp })));
@@ -49,6 +50,7 @@ function PublicRoutes() {
           <Route path="/my/plugins" element={withPublicSuspense(<MyPlugins />)} />
           <Route path="/login" element={withPublicSuspense(<Auth />)} />
           <Route path="/register" element={withPublicSuspense(<Auth />)} />
+          <Route path="/oauth/authorize" element={withPublicSuspense(<OAuthAuthorize />)} />
           <Route path="/verify-email" element={withPublicSuspense(<VerifyEmail />)} />
         </Routes>
       </AnimatePresence>

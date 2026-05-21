@@ -6,7 +6,19 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.errors.version_errors import VersionDomainError, ERROR_CODE_TO_HTTP
-from app.routers import plugins, categories, users, reviews, versions, auth, signatures, zones, notifications, submissions
+from app.routers import (
+    auth,
+    categories,
+    me_installs,
+    notifications,
+    plugins,
+    reviews,
+    signatures,
+    submissions,
+    users,
+    versions,
+    zones,
+)
 from app.routers.oauth import router as oauth_router
 from app.routers.admin import categories as admin_categories
 from app.routers.admin import dashboard as admin_dashboard
@@ -85,6 +97,7 @@ app.include_router(signatures.router, prefix="/api/v1/signatures", tags=["signat
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["notifications"])
 app.include_router(submissions.router, prefix="/api/v1", tags=["review-submissions"])
 app.include_router(oauth_router, prefix="/api/v1", tags=["oauth"])
+app.include_router(me_installs.router, prefix="/api/v1", tags=["me-installs"])
 app.include_router(admin_dashboard.router, prefix="/api/v1/admin", tags=["admin-dashboard"])
 app.include_router(admin_review.router, prefix="/api/v1/admin", tags=["admin-review"])
 app.include_router(admin_users.router, prefix="/api/v1/admin", tags=["admin-users"])

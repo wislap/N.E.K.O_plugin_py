@@ -9,11 +9,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import base64
+import hashlib
 import secrets
 import time
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
@@ -35,7 +34,8 @@ _auth_codes: dict[str, dict] = {}
 _KNOWN_CLIENTS = {
     "neko-desktop": {
         "name": "N.E.K.O Desktop",
-        "allowed_redirect_prefixes": ["neko://", "http://127.0.0.1:", "http://localhost:"],
+        "allowed_redirect_uris": ["neko://auth/callback"],
+        "allowed_redirect_prefixes": ["http://127.0.0.1:", "http://localhost:"],
     },
 }
 
@@ -55,6 +55,21 @@ class OAuthTokenRequest(BaseModel):
     code_verifier: str
     client_id: str = "neko-desktop"
     redirect_uri: str = "neko://auth/callback"
+
+
+class OAuthAuthorizeAcceptRequest(BaseModel):
+    client_id: str
+    redirect_uri: str
+    state: str
+    code_challenge: str
+    code_challenge_method: str = "S256"
+    response_type: str = "code"
+    scope: str = "read write"
+
+
+class OAuthAuthorizeAcceptResponse(BaseModel):
+    redirect_url: str
+    expires_in: int = _CODE_TTL
 
 
 class OAuthTokenResponse(BaseModel):
@@ -94,54 +109,41 @@ async def oauth_authorize(
     实际使用中，N.E.K.O 客户端打开浏览器访问 Market 登录页，
     登录后自动跳转到此授权端点。
     """
-    # 验证客户端
-    client = _KNOWN_CLIENTS.get(client_id)
-    if not client:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="未知的客户端"
-        )
-
-    # 验证 redirect_uri
-    if not _validate_redirect_uri(redirect_uri, client):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="不允许的 redirect_uri"
-        )
-
-    # 验证 code_challenge_method
-    if code_challenge_method != "S256":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="仅支持 S256 code_challenge_method"
-        )
-
-    if response_type != "code":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="仅支持 response_type=code"
-        )
-
-    # 生成授权码
-    code = secrets.token_urlsafe(32)
-
-    # 存储（带过期时间）
-    _cleanup_expired_codes()
-    _auth_codes[code] = {
-        "user_id": current_user.id,
-        "code_challenge": code_challenge,
-        "redirect_uri": redirect_uri,
-        "state": state,
-        "client_id": client_id,
-        "scope": scope,
-        "expires_at": time.time() + _CODE_TTL,
-    }
-
-    # 重定向到客户端
-    separator = "&" if "?" in redirect_uri else "?"
-    redirect_url = f"{redirect_uri}{separator}code={code}&state={state}"
-
+    redirect_url = _issue_authorization_redirect(
+        client_id=client_id,
+        redirect_uri=redirect_uri,
+        state=state,
+        code_challenge=code_challenge,
+        code_challenge_method=code_challenge_method,
+        response_type=response_type,
+        scope=scope,
+        user_id=current_user.id,
+    )
     return RedirectResponse(url=redirect_url, status_code=302)
+
+
+@router.post("/authorize/accept", response_model=OAuthAuthorizeAcceptResponse)
+async def oauth_authorize_accept(
+    payload: OAuthAuthorizeAcceptRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """网页登录态确认授权，返回可打开的桌面回调 URI。
+
+    Market 前端使用 localStorage 中的 Bearer token 调用此端点；成功后由
+    浏览器主动跳转到返回的 ``neko://`` URI，唤起本地客户端。
+    """
+    redirect_url = _issue_authorization_redirect(
+        client_id=payload.client_id,
+        redirect_uri=payload.redirect_uri,
+        state=payload.state,
+        code_challenge=payload.code_challenge,
+        code_challenge_method=payload.code_challenge_method,
+        response_type=payload.response_type,
+        scope=payload.scope,
+        user_id=current_user.id,
+    )
+    return OAuthAuthorizeAcceptResponse(redirect_url=redirect_url)
 
 
 @router.post("/token", response_model=OAuthTokenResponse)
@@ -219,8 +221,70 @@ async def list_oauth_clients():
 # ─── 内部工具 ──────────────────────────────────────────────────────
 
 
+def _issue_authorization_redirect(
+    *,
+    client_id: str,
+    redirect_uri: str,
+    state: str,
+    code_challenge: str,
+    code_challenge_method: str,
+    response_type: str,
+    scope: str,
+    user_id: int,
+) -> str:
+    # 验证客户端
+    client = _KNOWN_CLIENTS.get(client_id)
+    if not client:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="未知的客户端"
+        )
+
+    # 验证 redirect_uri
+    if not _validate_redirect_uri(redirect_uri, client):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不允许的 redirect_uri"
+        )
+
+    # 验证 code_challenge_method
+    if code_challenge_method != "S256":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="仅支持 S256 code_challenge_method"
+        )
+
+    if response_type != "code":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="仅支持 response_type=code"
+        )
+
+    # 生成授权码
+    code = secrets.token_urlsafe(32)
+
+    # 存储（带过期时间）
+    _cleanup_expired_codes()
+    _auth_codes[code] = {
+        "user_id": user_id,
+        "code_challenge": code_challenge,
+        "redirect_uri": redirect_uri,
+        "state": state,
+        "client_id": client_id,
+        "scope": scope,
+        "expires_at": time.time() + _CODE_TTL,
+    }
+
+    # 重定向到客户端
+    separator = "&" if "?" in redirect_uri else "?"
+    return f"{redirect_uri}{separator}code={code}&state={state}"
+
+
 def _validate_redirect_uri(uri: str, client: dict) -> bool:
     """验证 redirect_uri 是否在客户端允许的前缀列表中。"""
+    allowed_uris = client.get("allowed_redirect_uris", [])
+    if uri in allowed_uris:
+        return True
     prefixes = client.get("allowed_redirect_prefixes", [])
     return any(uri.startswith(prefix) for prefix in prefixes)
 

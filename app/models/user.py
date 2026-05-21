@@ -33,6 +33,11 @@ class User(Base):
     # 关系
     plugins = relationship("Plugin", back_populates="author")
     reviews = relationship("Review", back_populates="author")
+    plugin_installs = relationship(
+        "UserPluginInstall",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     
     # 权限组关系
     permission_groups = relationship(

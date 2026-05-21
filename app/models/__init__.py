@@ -13,6 +13,7 @@ from app.models.ai_sandbox_log import AISandboxLog
 from app.models.system_setting import SystemSetting, SMTPSettingKeys
 from app.models.notification import Notification
 from app.models.email_verification import EmailVerificationToken
+from app.models.user_plugin_install import UserPluginInstall
 from app.models.plugin_submission import (
     PluginReviewCase,
     PluginReviewComment,
@@ -43,6 +44,7 @@ __all__ = [
     "SystemSetting", "SMTPSettingKeys",
     "Notification",
     "EmailVerificationToken",
+    "UserPluginInstall",
     "PluginSubmission", "PluginSubmissionSnapshot",
     "PluginReviewCase", "PluginReviewComment", "PluginReviewEvent",
     "SubmissionStatus", "ReviewDecision", "ReviewCaseStatus",
