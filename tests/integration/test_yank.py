@@ -222,6 +222,33 @@ async def test_get_latest_404_when_no_versions(
     assert resp.json()["code"] == "latest_version_not_found"
 
 
+async def test_get_latest_404_when_latest_hash_is_not_valid_sha256(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    make_plugin,
+):
+    """latest 必须有合法 64-hex package_sha256，不能暴露 legacy/占位 hash。"""
+    author = await create_test_user(db_session, "invalid_hash_author", "invalid-hash@example.com")
+    plugin = await make_plugin(author=author)
+    db_session.add(
+        Version(
+            plugin_id=plugin.id,
+            version="1.0.0",
+            channel="stable",
+            is_latest=True,
+            package_url="https://example.test/pkg.neko-plugin",
+            package_sha256="0" * 64,
+            verification_status="legacy_unverified",
+        )
+    )
+    await db_session.commit()
+
+    resp = await client.get(f"/api/v1/plugins/{plugin.id}/versions/latest")
+
+    assert resp.status_code == 404
+    assert resp.json()["code"] == "latest_version_not_found"
+
+
 async def test_list_versions_filters_by_channel_and_yanked(
     client: AsyncClient,
     db_session: AsyncSession,

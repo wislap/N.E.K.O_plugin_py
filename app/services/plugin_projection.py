@@ -22,6 +22,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.plugin import Plugin
 from app.models.version import Version
 
+_HEX_CHARS = frozenset("0123456789abcdef")
+
+
+def _is_valid_package_sha256(value: str | None) -> bool:
+    raw = (value or "").strip().lower()
+    return (
+        len(raw) == 64
+        and raw != "0" * 64
+        and all(ch in _HEX_CHARS for ch in raw)
+    )
+
 
 async def attach_latest_version(
     db: AsyncSession,
@@ -33,9 +44,9 @@ async def attach_latest_version(
 
     传入空列表 / 元组时早返回，避免一次空 IN 查询。
 
-    R0 灵魂条款约束：本投影只会暴露 `package_url` 与 `package_sha256` 都
-    非空的版本；这两个字段空（legacy 数据 / 未经过 publish-from-release）
-    的行会被过滤为 `latest_version=None`，等价于"该 plugin 暂无可下载版本"。
+    R0 灵魂条款约束：本投影只会暴露 `package_url` 非空且
+    `package_sha256` 是合法 64-hex 的版本；legacy 数据 / 手填残缺数据
+    会被过滤为 `latest_version=None`，等价于"该 plugin 暂无可下载版本"。
     """
     plugin_list = list(plugins)
     if not plugin_list:
@@ -52,7 +63,11 @@ async def attach_latest_version(
         Version.package_sha256.is_not(None),
         Version.package_sha256 != "",
     )
-    rows = (await db.execute(stmt)).scalars().all()
+    rows = [
+        row
+        for row in (await db.execute(stmt)).scalars().all()
+        if _is_valid_package_sha256(row.package_sha256)
+    ]
     by_plugin: dict[int, Version] = {row.plugin_id: row for row in rows}
 
     for plugin in plugin_list:

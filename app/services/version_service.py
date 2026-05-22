@@ -32,7 +32,16 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_CHANNELS = ("stable", "beta")
 ChannelLiteral = Literal["stable", "beta"]
+_HEX_CHARS = frozenset("0123456789abcdef")
 
+
+def _is_valid_package_sha256(value: str | None) -> bool:
+    raw = (value or "").strip().lower()
+    return (
+        len(raw) == 64
+        and raw != "0" * 64
+        and all(ch in _HEX_CHARS for ch in raw)
+    )
 
 
 def _is_admin(user: User) -> bool:
@@ -113,10 +122,12 @@ class VersionService:
                 Version.package_sha256.is_not(None),
                 Version.package_sha256 != "",
             )
-            .limit(1)
         )
         result = await db.execute(query)
-        return result.scalar_one_or_none()
+        for version in result.scalars().all():
+            if _is_valid_package_sha256(version.package_sha256):
+                return version
+        return None
 
 
     @staticmethod

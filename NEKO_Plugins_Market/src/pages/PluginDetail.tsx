@@ -64,7 +64,11 @@ export function PluginDetail() {
   const zone = plugin ? getZoneById(plugin.zone) : undefined;
   const installablePackageUrl = latestVersion?.package_url?.trim() || '';
   const installablePackageSha256 = latestVersion?.package_sha256?.trim() || '';
-  const canInstallVerifiedPackage = Boolean(installablePackageUrl && installablePackageSha256);
+  const canInstallVerifiedPackage = Boolean(
+    installablePackageUrl
+      && /^[0-9a-fA-F]{64}$/.test(installablePackageSha256)
+      && installablePackageSha256 !== '0'.repeat(64),
+  );
 
   const currentUser = useMemo<ApiUser | null>(() => {
     try {
@@ -184,7 +188,7 @@ export function PluginDetail() {
       setIsDownloading(false);
     }
 
-    const target = plugin.downloadUrl || plugin.githubRepo;
+    const target = plugin.downloadUrl;
     if (target) {
       window.open(target, '_blank', 'noopener,noreferrer');
     }
