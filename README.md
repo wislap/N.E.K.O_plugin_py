@@ -180,6 +180,33 @@ DATABASE_URL=sqlite+aiosqlite:////data/plugin_market.db
 VITE_API_BASE_URL=http://localhost:8000/api/v1
 ```
 
+### 8. Docker Compose 生产环境
+
+生产环境请使用 `docker-compose.prod.yml`，不要直接使用开发版 Compose：
+
+```bash
+cp .env.production.example .env.production
+# 编辑 SECRET_KEY / INITIAL_ADMIN_PASSWORD / MARKET_SITE_ADDRESS / ALLOWED_HOSTS
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+```
+
+生产版包含：
+
+- Caddy 反向代理与 TLS；
+- Vite 静态构建 + nginx；
+- FastAPI 后端生产启动；
+- Alembic 一次性迁移任务；
+- SQLite `/data/plugin_market.db` 持久 volume；
+- 在线备份 profile。
+
+在线备份：
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm backup
+```
+
+更多细节见 `docs/production-deploy.md`。
+
 ### 常见问题
 
 #### `ModuleNotFoundError: No module named 'app'`
