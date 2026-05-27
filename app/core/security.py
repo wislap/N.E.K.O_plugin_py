@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import secrets
 from typing import Optional, Union
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -53,15 +54,16 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-def create_refresh_token(data: dict) -> str:
+def create_refresh_token(data: dict, jti: str | None = None) -> str:
     """创建 JWT 刷新令牌（使用当前主密钥）"""
     from app.core.jwt_key_manager import jwt_key_manager
     
     to_encode = data.copy()
-    expire = utc_now() + timedelta(days=7)  # 刷新令牌7天有效期
+    expire = utc_now() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({
         "exp": expire,
         "type": "refresh",
+        "jti": jti or secrets.token_urlsafe(32),
         "kid": jwt_key_manager.get_key_id()  # 添加密钥ID
     })
     
@@ -177,6 +179,16 @@ async def get_current_user(
         )
     
     return user
+
+
+def require_verified_user(current_user: User = Depends(get_current_user)) -> User:
+    """Require a verified email address for creator/publishing actions."""
+    if current_user.is_admin or current_user.email_verified_at is not None:
+        return current_user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="请先完成邮箱验证",
+    )
 
 
 async def get_or_create_debug_user(db: AsyncSession) -> User:

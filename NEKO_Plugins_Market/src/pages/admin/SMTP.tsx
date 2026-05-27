@@ -14,6 +14,7 @@ const defaultSettings: SMTPSettings = {
   port: 587,
   user: "",
   password: "",
+  ssl: false,
   tls: true,
   from_email: "",
   enabled: false
@@ -41,7 +42,12 @@ export default function AdminSMTP() {
   }, []);
 
   const updateField = <K extends keyof SMTPSettings>(key: K, value: SMTPSettings[K]) => {
-    setSettings((current) => ({ ...current, [key]: value }));
+    setSettings((current) => {
+      if (key === "ssl" && value === true) {
+        return { ...current, ssl: true, tls: false };
+      }
+      return { ...current, [key]: value };
+    });
   };
 
   const handleSave = async () => {
@@ -134,7 +140,11 @@ export default function AdminSMTP() {
             </div>
             <div className="flex flex-wrap gap-6">
               <label className="flex items-center gap-3">
-                <Switch checked={settings.tls} onCheckedChange={(checked) => updateField("tls", checked)} />
+                <Switch checked={settings.ssl} onCheckedChange={(checked) => updateField("ssl", checked)} />
+                <span className="text-sm">启用 SSL</span>
+              </label>
+              <label className="flex items-center gap-3">
+                <Switch checked={settings.tls} disabled={settings.ssl} onCheckedChange={(checked) => updateField("tls", checked)} />
                 <span className="text-sm">启用 TLS</span>
               </label>
               <label className="flex items-center gap-3">

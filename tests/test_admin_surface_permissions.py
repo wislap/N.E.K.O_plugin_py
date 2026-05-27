@@ -9,7 +9,7 @@ from tests.conftest import create_test_user, grant_permission
 pytestmark = pytest.mark.asyncio
 
 
-async def login(client: AsyncClient, username: str, password: str = "password123") -> str:
+async def login(client: AsyncClient, username: str, password: str = "Str0ngPass!42") -> str:
     response = await client.post(
         "/api/v1/auth/login",
         json={"username": username, "password": password},

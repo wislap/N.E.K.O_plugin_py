@@ -2,17 +2,38 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, MailCheck, RefreshCcw, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { authApi } from '@/services/auth';
 import { getErrorMessage, notifySuccess, reportError } from '@/lib/error-reporting';
+import type { User } from '@/services/types';
 
 type VerifyState = 'checking' | 'success' | 'error' | 'idle';
+
+const verificationRequests = new Map<string, Promise<User>>();
+
+function verifyEmailOnce(token: string) {
+  const existing = verificationRequests.get(token);
+  if (existing) {
+    return existing;
+  }
+
+  const request = authApi.verifyEmail(token).catch((error) => {
+    verificationRequests.delete(token);
+    throw error;
+  });
+  verificationRequests.set(token, request);
+  return request;
+}
 
 export function VerifyEmail() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const token = searchParams.get('token') ?? '';
+  const emailParam = searchParams.get('email') ?? '';
   const [state, setState] = useState<VerifyState>(token ? 'checking' : 'idle');
   const [message, setMessage] = useState(token ? '正在验证邮箱...' : '验证链接缺少 token');
+  const [email, setEmail] = useState(emailParam);
   const [isResending, setIsResending] = useState(false);
 
   useEffect(() => {
@@ -22,13 +43,11 @@ export function VerifyEmail() {
     }
 
     let cancelled = false;
-    authApi.verifyEmail(token)
+    verifyEmailOnce(token)
       .then((user) => {
         if (cancelled) return;
-        localStorage.setItem('currentUser', JSON.stringify(user));
-        window.dispatchEvent(new Event('auth:changed'));
         setState('success');
-        setMessage('邮箱验证成功，可以继续使用插件市场。');
+        setMessage(`邮箱 ${user.email} 验证成功，现在可以登录插件市场。`);
         notifySuccess('邮箱验证成功');
       })
       .catch((error) => {
@@ -46,10 +65,16 @@ export function VerifyEmail() {
     };
   }, [token]);
 
-  const resend = async () => {
+  const resend = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!email.trim()) {
+      setMessage('请输入注册邮箱后再重发验证邮件。');
+      return;
+    }
+
     setIsResending(true);
     try {
-      const response = await authApi.resendVerificationEmail();
+      const response = await authApi.resendVerificationEmailPublic({ email: email.trim() });
       setMessage(response.message);
       notifySuccess(response.message);
     } catch (error) {
@@ -79,19 +104,34 @@ export function VerifyEmail() {
 
         <div className="mt-6 flex flex-col gap-3">
           {state === 'success' ? (
-            <Button onClick={() => navigate('/upload')} className="bg-primary text-primary-foreground">
-              继续提交插件
+            <Button onClick={() => navigate('/login')} className="bg-primary text-primary-foreground">
+              前往登录
             </Button>
           ) : (
-            <Button
-              type="button"
-              onClick={resend}
-              disabled={isResending}
-              className="gap-2 bg-primary text-primary-foreground"
-            >
-              <RefreshCcw className="h-4 w-4" />
-              {isResending ? '发送中...' : '重新发送验证邮件'}
-            </Button>
+            <form onSubmit={resend} className="space-y-3 text-left">
+              <div className="space-y-2">
+                <Label htmlFor="verify-email-resend" className="text-slate-200">
+                  注册邮箱
+                </Label>
+                <Input
+                  id="verify-email-resend"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  className="border-slate-700 bg-slate-950/50 text-white"
+                  required
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={isResending}
+                className="w-full gap-2 bg-primary text-primary-foreground"
+              >
+                <RefreshCcw className="h-4 w-4" />
+                {isResending ? '发送中...' : '重新发送验证邮件'}
+              </Button>
+            </form>
           )}
           <Link to="/" className="text-sm text-slate-400 hover:text-white">
             返回首页

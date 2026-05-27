@@ -25,6 +25,7 @@ import DOMPurify from 'dompurify';
 import 'highlight.js/styles/github-dark.css';
 import { pluginsApi } from '@/services/plugins';
 import { reviewsApi } from '@/services/reviews';
+import { meInstallsApi } from '@/services/meInstalls';
 import { nekoBridge } from '@/lib/neko-bridge';
 import type { Plugin, Review } from '@/types';
 import type { PluginVersion, User as ApiUser } from '@/services/types';
@@ -191,6 +192,34 @@ export function PluginDetail() {
     const target = plugin.downloadUrl;
     if (target) {
       window.open(target, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const recordInstall = async () => {
+    if (!plugin || !latestVersion) {
+      return;
+    }
+
+    try {
+      await meInstallsApi.record({
+        plugin_id: Number(plugin.id),
+        version: latestVersion.version,
+        channel: latestVersion.channel,
+        package_sha256: installablePackageSha256,
+        payload_hash: latestVersion.payload_hash || undefined,
+        installed_plugin_id: plugin.slug,
+        client_id: 'neko-web-bridge',
+      });
+    } catch (error) {
+      logError(error, {
+        title: '安装记录同步失败',
+        severity: 'warn',
+        context: {
+          module: 'pluginDetail',
+          action: 'recordInstall',
+          pluginId: plugin.id,
+        },
+      });
     }
   };
 
@@ -413,6 +442,7 @@ export function PluginDetail() {
                         setInstallMessage(task.message);
                         if (task.status === 'completed') {
                           setInstallStatus('success');
+                          void recordInstall();
                           notifySuccess('插件已安装到 N.E.K.O', {
                             context: { module: 'pluginDetail', action: 'nekoInstall' }
                           });

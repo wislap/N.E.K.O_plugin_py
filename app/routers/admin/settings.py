@@ -22,6 +22,7 @@ class SMTPSettingsRequest(BaseModel):
     port: int = Field(default=587, description="SMTP 端口")
     user: str = Field(..., description="SMTP 用户名")
     password: Optional[str] = Field(None, description="SMTP 密码（留空表示不修改）")
+    ssl: bool = Field(default=False, description="是否使用 SSL 直连")
     tls: bool = Field(default=True, description="是否使用 TLS")
     from_email: EmailStr = Field(..., description="发件人邮箱")
     enabled: bool = Field(default=True, description="是否启用")
@@ -32,6 +33,7 @@ class SMTPSettingsResponse(BaseModel):
     host: str
     port: int
     user: str
+    ssl: bool
     tls: bool
     from_email: str
     enabled: bool
@@ -69,6 +71,7 @@ async def get_smtp_settings(
         host=settings.get('smtp_host', ''),
         port=settings.get('smtp_port', 587),
         user=settings.get('smtp_user', ''),
+        ssl=settings.get('smtp_ssl', False),
         tls=settings.get('smtp_tls', True),
         from_email=settings.get('smtp_from', ''),
         enabled=settings.get('smtp_enabled', False)
@@ -97,6 +100,7 @@ async def update_smtp_settings(
         port=data.port,
         user=data.user,
         password=data.password,  # 如果为 None 则不修改
+        ssl=data.ssl,
         tls=data.tls,
         from_email=data.from_email,
         enabled=data.enabled,
@@ -198,6 +202,7 @@ async def get_smtp_status(
         "port": settings.get('smtp_port'),
         "user": settings.get('smtp_user'),
         "from_email": settings.get('smtp_from'),
+        "ssl": settings.get('smtp_ssl', False),
         "tls": settings.get('smtp_tls', True)
     }
 

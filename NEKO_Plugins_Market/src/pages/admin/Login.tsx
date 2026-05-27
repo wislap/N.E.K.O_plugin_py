@@ -28,7 +28,7 @@ export default function AdminLogin() {
       localStorage.setItem("refreshToken", response.refresh_token);
       localStorage.setItem("currentUser", JSON.stringify(response.user));
       window.dispatchEvent(new Event("auth:changed"));
-      navigate("/admin");
+      navigate(response.user.must_change_password ? "/admin/change-password" : "/admin", { replace: true });
     } catch (err) {
       const message = getErrorMessage(err, "登录失败，请检查用户名和密码");
       setError(message);

@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_verified_user
 from app.models.user import User
 from app.schemas.plugin import (
     PluginUpdate, PluginList, PluginDetail,
@@ -151,7 +151,7 @@ async def get_plugin_by_slug(
 async def update_plugin(
     plugin_id: int,
     update_data: PluginUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_verified_user),
     db: AsyncSession = Depends(get_db)
 ):
     """

@@ -2,13 +2,16 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.email_verification import EmailVerificationToken
+from app.models.plugin import Plugin, PluginStatus
+from app.core.time import utc_now
 from tests.conftest import create_test_user, grant_permission
 
 
 pytestmark = pytest.mark.asyncio
 
 
-async def login(client: AsyncClient, username: str, password: str = "password123") -> str:
+async def login(client: AsyncClient, username: str, password: str = "Str0ngPass!42") -> str:
     response = await client.post(
         "/api/v1/auth/login",
         json={"username": username, "password": password},
@@ -167,6 +170,63 @@ async def test_user_management_permission_allows_non_admin_operator(
     assert update_response.status_code == 200
     assert update_response.json()["is_active"] is False
     assert update_response.json()["username"] == "managed_member_disabled"
+
+
+async def test_delete_user_cleans_auth_records_but_blocks_business_data(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    admin = await create_test_user(
+        db_session,
+        username="delete_admin",
+        email="delete-admin@example.com",
+        is_admin=True,
+    )
+    stale_user = await create_test_user(
+        db_session,
+        username="stale_user",
+        email="stale-user@example.com",
+        email_verified=False,
+    )
+    token = EmailVerificationToken(
+        user_id=stale_user.id,
+        email=stale_user.email,
+        token_hash="a" * 64,
+        expires_at=utc_now(),
+        is_active=True,
+    )
+    db_session.add(token)
+
+    author = await create_test_user(
+        db_session,
+        username="plugin_author_user",
+        email="plugin-author-user@example.com",
+    )
+    plugin = Plugin(
+        name="owned plugin",
+        slug="owned-plugin",
+        author_id=author.id,
+        author_name=author.username,
+        status=PluginStatus.APPROVED,
+        tags=[],
+    )
+    db_session.add(plugin)
+    await db_session.commit()
+
+    admin_token = await login(client, admin.username)
+
+    stale_delete = await client.delete(
+        f"/api/v1/admin/users/{stale_user.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert stale_delete.status_code == 200
+
+    author_delete = await client.delete(
+        f"/api/v1/admin/users/{author.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert author_delete.status_code == 409
+    assert "业务数据" in author_delete.json()["detail"]
 
 
 async def test_category_mutations_require_admin(

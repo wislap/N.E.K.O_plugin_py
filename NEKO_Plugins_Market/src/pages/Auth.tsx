@@ -13,18 +13,6 @@ import { getErrorMessage, notifySuccess, reportError } from '@/lib/error-reporti
 type AuthMode = 'login' | 'register';
 
 const PASSWORD_SYMBOLS = '!@#$%&*?';
-const COMMON_LEAKED_PASSWORDS = new Set([
-  '123456',
-  '12345678',
-  '123456789',
-  'password',
-  'password123',
-  'qwerty',
-  '111111',
-  'admin123',
-  'root',
-  'root123'
-]);
 
 function createStrongPassword() {
   const groups = [
@@ -84,36 +72,44 @@ export function Auth() {
     setErrorMessage('');
     const password = targetMode === 'login' ? loginPassword : registerPassword;
 
-    if (targetMode === 'register' && COMMON_LEAKED_PASSWORDS.has(password.trim().toLowerCase())) {
-      setErrorMessage('这个密码过于常见，建议使用“生成强密码”后再注册。');
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
-      const response = targetMode === 'login'
-        ? await authApi.login({ username, password })
-        : await authApi.register({
-            username,
-            email,
-            password,
-            display_name: displayName.trim() || undefined
+      if (targetMode === 'login') {
+        const response = await authApi.login({ username, password });
+        storeSession(response);
+        notifySuccess('登录成功', {
+          context: {
+            module: 'auth',
+            action: targetMode
+          }
+        });
+        if (response.user.must_change_password) {
+          navigate('/admin/change-password', { replace: true });
+          return;
+        }
+        navigate(nextPath, { replace: true });
+        return;
+      }
+
+      const response = await authApi.register({
+        username,
+        email,
+        password,
+        display_name: displayName.trim() || undefined
       });
 
-      storeSession(response);
-      notifySuccess(targetMode === 'login' ? '登录成功' : '注册成功', {
-        description: targetMode === 'register'
-          ? response.verification_email_sent
-            ? '验证邮件已发送，请检查邮箱。'
-            : '账号已创建；当前邮件服务未启用，可稍后在账号内重发验证邮件。'
-          : undefined,
+      notifySuccess('注册成功', {
+        description: response.verification_email_sent
+          ? '验证邮件已发送，请检查邮箱；验证完成后即可登录。'
+          : '账号已创建；当前邮件服务未启用，请联系管理员完成验证。',
         context: {
           module: 'auth',
           action: targetMode
         }
       });
-      navigate(nextPath, { replace: true });
+      setMode('login');
+      navigate(`/login${nextQuery}`, { replace: true });
     } catch (error) {
       const message = getErrorMessage(error, '操作失败，请稍后重试');
       setErrorMessage(message);
@@ -416,7 +412,7 @@ export function Auth() {
                   className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-95 text-primary-foreground py-6"
                   tabIndex={isRegister ? 0 : -1}
                 >
-                  {isSubmitting && isRegister ? '处理中...' : '注册并登录'}
+                  {isSubmitting && isRegister ? '处理中...' : '注册'}
                 </Button>
               </form>
             </motion.div>

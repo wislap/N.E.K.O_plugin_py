@@ -50,6 +50,29 @@ export interface Plugin {
   published_at?: string | null;
 }
 
+export interface UserPluginInstall {
+  id: number;
+  plugin_id: number;
+  version?: string | null;
+  channel?: string | null;
+  package_sha256?: string | null;
+  payload_hash?: string | null;
+  installed_plugin_id?: string | null;
+  client_id: string;
+  installed_at: string;
+  last_seen_at: string;
+}
+
+export interface UserPluginInstallCreate {
+  plugin_id: number;
+  version?: string | null;
+  channel?: string | null;
+  package_sha256?: string | null;
+  payload_hash?: string | null;
+  installed_plugin_id?: string | null;
+  client_id?: string;
+}
+
 export interface Role {
   id: number;
   code?: string;
@@ -82,6 +105,7 @@ export interface SMTPSettings {
   port: number;
   user: string;
   password?: string;
+  ssl: boolean;
   tls: boolean;
   from_email: string;
   enabled: boolean;
@@ -138,13 +162,27 @@ export interface LoginResponse {
   access_token: string;
   refresh_token: string;
   token_type: string;
+}
+
+export interface RegisterResponse {
+  user: User;
   verification_email_sent?: boolean;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  refresh_token?: string | null;
+  token_type: string;
 }
 
 export interface ResendVerificationResponse {
   already_verified: boolean;
   verification_email_sent: boolean;
   message: string;
+}
+
+export interface PublicResendVerificationRequest {
+  email: string;
 }
 
 export interface PaginatedResponse<T> {

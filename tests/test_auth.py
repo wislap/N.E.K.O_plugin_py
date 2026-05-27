@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.models import EmailVerificationToken, User
 from app.services.bootstrap_service import BootstrapService
 from app.services.email_verification_service import email_verification_service
+from tests.conftest import create_test_user
 
 
 pytestmark = pytest.mark.asyncio
@@ -19,7 +20,10 @@ async def test_health_check(client: AsyncClient):
 
 
 async def test_register_login_and_get_current_user(client: AsyncClient, monkeypatch):
+    captured = {}
+
     async def fake_send(*args, **kwargs):
+        captured["raw_token"] = args[2]
         return True
 
     monkeypatch.setattr(email_verification_service, "send_verification_email", fake_send)
@@ -29,7 +33,7 @@ async def test_register_login_and_get_current_user(client: AsyncClient, monkeypa
         json={
             "username": "alice",
             "email": "alice@example.com",
-            "password": "password123",
+            "password": "Str0ngPass!42",
             "display_name": "Alice",
         },
     )
@@ -39,12 +43,25 @@ async def test_register_login_and_get_current_user(client: AsyncClient, monkeypa
     assert register_data["user"]["username"] == "alice"
     assert register_data["user"]["is_email_verified"] is False
     assert register_data["verification_email_sent"] is True
-    assert "access_token" in register_data
+    assert "access_token" not in register_data
     assert "hashed_password" not in register_data["user"]
+
+    unverified_login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "alice", "password": "Str0ngPass!42"},
+    )
+    assert unverified_login_response.status_code == 401
+    assert "邮箱验证" in unverified_login_response.json()["detail"]
+
+    verify_response = await client.post(
+        "/api/v1/auth/verify-email",
+        params={"token": captured["raw_token"]},
+    )
+    assert verify_response.status_code == 200
 
     login_response = await client.post(
         "/api/v1/auth/login",
-        json={"username": "alice", "password": "password123"},
+        json={"username": "alice", "password": "Str0ngPass!42"},
     )
 
     assert login_response.status_code == 200
@@ -77,7 +94,7 @@ async def test_register_creates_hashed_email_verification_token(
         json={
             "username": "verify_user",
             "email": "verify@example.com",
-            "password": "password123",
+            "password": "Str0ngPass!42",
         },
     )
 
@@ -91,6 +108,30 @@ async def test_register_creates_hashed_email_verification_token(
     assert token.token_hash != captured["raw_token"]
     assert token.used_at is None
     assert token.is_active is True
+
+
+async def test_register_fails_when_email_delivery_unavailable(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+):
+    monkeypatch.setattr(settings, "EMAIL_DELIVERY_MODE", "smtp")
+    monkeypatch.setattr(settings, "SMTP_HOST", None)
+
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "no_mail_user",
+            "email": "no-mail@example.com",
+            "password": "123456",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "邮箱验证服务未配置" in response.json()["detail"]
+
+    user = await db_session.scalar(select(User).where(User.username == "no_mail_user"))
+    assert user is None
 
 
 async def test_verify_email_marks_user_verified_and_consumes_token(
@@ -111,7 +152,7 @@ async def test_verify_email_marks_user_verified_and_consumes_token(
         json={
             "username": "verify_target",
             "email": "verify-target@example.com",
-            "password": "password123",
+            "password": "Str0ngPass!42",
         },
     )
     assert register_response.status_code == 201
@@ -138,28 +179,26 @@ async def test_verify_email_marks_user_verified_and_consumes_token(
         "/api/v1/auth/verify-email",
         params={"token": captured["raw_token"]},
     )
-    assert second_response.status_code == 400
+    assert second_response.status_code == 200
+    assert second_response.json()["is_email_verified"] is True
 
 
 async def test_resend_verification_email_uses_authenticated_user(
     client: AsyncClient,
+    db_session,
     monkeypatch,
 ):
     async def fake_send(*args, **kwargs):
         return True
 
     monkeypatch.setattr(email_verification_service, "send_verification_email", fake_send)
-
-    register_response = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "username": "resend_user",
-            "email": "resend@example.com",
-            "password": "password123",
-        },
+    await create_test_user(db_session, username="resend_user", email="resend@example.com")
+    login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "resend_user", "password": "Str0ngPass!42"},
     )
-    assert register_response.status_code == 201
-    token = register_response.json()["access_token"]
+    assert login_response.status_code == 200
+    token = login_response.json()["access_token"]
 
     monkeypatch.setattr(settings, "EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS", 0)
     resend_response = await client.post(
@@ -168,8 +207,37 @@ async def test_resend_verification_email_uses_authenticated_user(
     )
 
     assert resend_response.status_code == 200
-    assert resend_response.json()["already_verified"] is False
-    assert resend_response.json()["verification_email_sent"] is True
+    assert resend_response.json()["already_verified"] is True
+    assert resend_response.json()["verification_email_sent"] is False
+
+
+async def test_public_resend_verification_email_by_email(
+    client: AsyncClient,
+    db_session,
+    monkeypatch,
+):
+    captured = {}
+
+    async def fake_send(db, user, raw_token):
+        captured["raw_token"] = raw_token
+        return True
+
+    monkeypatch.setattr(email_verification_service, "send_verification_email", fake_send)
+    await create_test_user(
+        db_session,
+        username="public_resend_user",
+        email="public-resend@example.com",
+        email_verified=False,
+    )
+
+    response = await client.post(
+        "/api/v1/auth/resend-verification-email/public",
+        json={"email": "public-resend@example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["verification_email_sent"] is True
+    assert "raw_token" in captured
 
 
 async def test_bootstrap_initial_admin_must_change_password(
@@ -196,7 +264,7 @@ async def test_bootstrap_initial_admin_must_change_password(
     change_response = await client.post(
         "/api/v1/auth/change-password",
         headers={"Authorization": f"Bearer {token}"},
-        json={"current_password": "password", "new_password": "new-password"},
+        json={"current_password": "password", "new_password": "NewPassword123!"},
     )
 
     assert change_response.status_code == 200
@@ -210,7 +278,7 @@ async def test_bootstrap_initial_admin_must_change_password(
 
     new_password_response = await client.post(
         "/api/v1/auth/login",
-        json={"username": "root", "password": "new-password"},
+        json={"username": "root", "password": "NewPassword123!"},
     )
     assert new_password_response.status_code == 200
     assert new_password_response.json()["user"]["must_change_password"] is False
@@ -225,6 +293,109 @@ async def test_bootstrap_initial_admin_must_change_password(
 
     new_password_after_bootstrap = await client.post(
         "/api/v1/auth/login",
-        json={"username": "root", "password": "new-password"},
+        json={"username": "root", "password": "NewPassword123!"},
     )
     assert new_password_after_bootstrap.status_code == 200
+
+
+async def test_register_accepts_simple_password(client: AsyncClient, monkeypatch):
+    async def fake_send(*args, **kwargs):
+        return True
+
+    monkeypatch.setattr(email_verification_service, "send_verification_email", fake_send)
+
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "simple_user",
+            "email": "simple@example.com",
+            "password": "123456",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["user"]["username"] == "simple_user"
+
+
+async def test_refresh_token_rotates_and_old_token_is_rejected(client: AsyncClient, db_session):
+    await create_test_user(db_session, username="rotate_user", email="rotate@example.com")
+    login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "rotate_user", "password": "Str0ngPass!42"},
+    )
+    assert login_response.status_code == 200
+    old_refresh = login_response.json()["refresh_token"]
+
+    refresh_response = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": old_refresh},
+    )
+    assert refresh_response.status_code == 200
+    new_refresh = refresh_response.json()["refresh_token"]
+    assert new_refresh
+    assert new_refresh != old_refresh
+
+    reused_response = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": old_refresh},
+    )
+    assert reused_response.status_code == 401
+
+
+async def test_logout_revokes_refresh_token(client: AsyncClient, db_session):
+    await create_test_user(db_session, username="logout_user", email="logout@example.com")
+    login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "logout_user", "password": "Str0ngPass!42"},
+    )
+    assert login_response.status_code == 200
+    access = login_response.json()["access_token"]
+    refresh = login_response.json()["refresh_token"]
+
+    logout_response = await client.post(
+        "/api/v1/auth/logout",
+        headers={"Authorization": f"Bearer {access}"},
+        json={"refresh_token": refresh},
+    )
+    assert logout_response.status_code == 200
+
+    refresh_response = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": refresh},
+    )
+    assert refresh_response.status_code == 401
+
+
+async def test_login_failure_lockout(client: AsyncClient, db_session, monkeypatch):
+    user = await create_test_user(db_session, username="lock_user")
+    monkeypatch.setattr(settings, "AUTH_LOGIN_MAX_FAILURES", 2)
+    monkeypatch.setattr(settings, "AUTH_LOGIN_LOCKOUT_MINUTES", 10)
+
+    for _ in range(2):
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"username": user.username, "password": "wrong-password"},
+        )
+        assert response.status_code == 401
+
+    locked_response = await client.post(
+        "/api/v1/auth/login",
+        json={"username": user.username, "password": "Str0ngPass!42"},
+    )
+    assert locked_response.status_code == 401
+    assert "登录失败次数过多" in locked_response.json()["detail"]
+
+
+async def test_unverified_user_cannot_login(client: AsyncClient, db_session):
+    await create_test_user(
+        db_session,
+        username="unverified_creator",
+        email="unverified-creator@example.com",
+        email_verified=False,
+    )
+    login_response = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "unverified_creator", "password": "Str0ngPass!42"},
+    )
+    assert login_response.status_code == 401
+    assert "邮箱验证" in login_response.json()["detail"]

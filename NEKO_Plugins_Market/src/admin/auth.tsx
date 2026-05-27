@@ -54,6 +54,7 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
     isLoading: hasToken && (userQuery.isLoading || permissionsQuery.isLoading),
     isError: userQuery.isError || permissionsQuery.isError,
     logout: () => {
+      void authApi.logout().catch(() => undefined);
       clearStoredSession();
       queryClient.removeQueries({ queryKey: ["admin"] });
     }

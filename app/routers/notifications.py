@@ -14,6 +14,7 @@ from app.schemas.notification import Notification
 from app.schemas.common import MessageResponse
 from app.services.email_service import email_service
 from app.services.notification_service import NotificationService
+from app.services.system_setting_service import system_setting_service
 
 router = APIRouter(tags=["notifications"])
 
@@ -169,6 +170,7 @@ async def send_review_notification(
 
 @router.get("/email-status")
 async def get_email_service_status(
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -180,13 +182,18 @@ async def get_email_service_status(
             detail="需要 system:smtp 权限"
         )
     
-    from app.core.config import settings
+    settings = await system_setting_service.get_smtp_settings(db)
+    required_fields = ["smtp_host", "smtp_user", "smtp_password", "smtp_from"]
+    missing_fields = [field for field in required_fields if not settings.get(field)]
     
     return {
-        "enabled": email_service.enabled,
-        "smtp_host": settings.SMTP_HOST,
-        "smtp_port": settings.SMTP_PORT,
-        "smtp_user": settings.SMTP_USER,
-        "smtp_from": settings.SMTP_FROM,
-        "smtp_tls": settings.SMTP_TLS
+        "enabled": settings.get("smtp_enabled", False),
+        "configured": len(missing_fields) == 0,
+        "missing_fields": missing_fields if missing_fields else None,
+        "smtp_host": settings.get("smtp_host"),
+        "smtp_port": settings.get("smtp_port"),
+        "smtp_user": settings.get("smtp_user"),
+        "smtp_from": settings.get("smtp_from"),
+        "smtp_ssl": settings.get("smtp_ssl", False),
+        "smtp_tls": settings.get("smtp_tls", True),
     }

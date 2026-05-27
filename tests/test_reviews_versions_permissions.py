@@ -12,7 +12,7 @@ from tests.conftest import create_test_user
 pytestmark = pytest.mark.asyncio
 
 
-async def login(client: AsyncClient, username: str, password: str = "password123") -> str:
+async def login(client: AsyncClient, username: str, password: str = "Str0ngPass!42") -> str:
     response = await client.post(
         "/api/v1/auth/login",
         json={"username": username, "password": password},
@@ -29,7 +29,7 @@ async def create_plugin(client: AsyncClient, owner_token: str, admin_token: str,
         json={
             "repo_url": f"https://github.com/neko/n.e.k.o_plugin_{repo_slug}",
             "plugin_name": "Owned Plugin",
-            "plugin_slug": slug,
+            "plugin_slug": repo_slug,
             "description": "Plugin for permission tests",
             "short_description": "Permission tests",
         },

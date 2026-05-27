@@ -10,7 +10,7 @@ from tests.conftest import create_test_user, grant_permission
 pytestmark = pytest.mark.asyncio
 
 
-async def login(client: AsyncClient, username: str, password: str = "password123") -> str:
+async def login(client: AsyncClient, username: str, password: str = "Str0ngPass!42") -> str:
     response = await client.post(
         "/api/v1/auth/login",
         json={"username": username, "password": password},
@@ -36,7 +36,7 @@ async def create_submitted_review(
         json={
             "repo_url": f"https://github.com/wislap/n.e.k.o_plugin_{repo_slug}",
             "plugin_name": "Workspace Demo",
-            "plugin_slug": slug,
+            "plugin_slug": repo_slug,
             "description": "A plugin submitted through the new review workspace.",
             "short_description": "Workspace review",
             "zone_slug": "tools",
@@ -144,7 +144,7 @@ async def test_review_workspace_contract_blocks_critical_then_approves(
     plugin = await db_session.scalar(select(Plugin).where(Plugin.id == approved["plugin_id"]))
     assert plugin is not None
     assert plugin.status == PluginStatus.APPROVED
-    assert plugin.slug == "workspace-demo"
+    assert plugin.slug == "workspace_demo"
 
     detail_response = await client.get(
         f"/api/v1/admin/review/submissions/{submitted['id']}",

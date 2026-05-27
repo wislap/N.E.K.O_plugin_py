@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import create_access_token, create_refresh_token, get_current_user
 from app.models.user import User
+from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
 
@@ -200,7 +201,11 @@ async def oauth_token(
     # 发放 token
     user_id = code_data["user_id"]
     access_token = create_access_token(data={"sub": str(user_id)})
-    refresh_token = create_refresh_token(data={"sub": str(user_id)})
+    refresh_token = await AuthService._issue_refresh_token(
+        db,
+        int(user_id),
+        client_id=payload.client_id,
+    )
 
     return OAuthTokenResponse(
         access_token=access_token,

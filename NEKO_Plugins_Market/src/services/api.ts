@@ -1,5 +1,6 @@
 export { authApi } from "./auth";
 export { marketApi } from "./market";
+export { meInstallsApi } from "./meInstalls";
 export { notificationsApi } from "./notifications";
 export { pluginsApi } from "./plugins";
 export { reviewsApi } from "./reviews";
@@ -25,5 +26,7 @@ export type {
   Role,
   SMTPSettings,
   SystemSetting,
+  UserPluginInstall,
+  UserPluginInstallCreate,
   User
 } from "./types";

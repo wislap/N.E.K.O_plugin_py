@@ -21,6 +21,7 @@ class SystemSettingService:
         SMTPSettingKeys.PORT: {'value': '587', 'group': 'smtp', 'description': 'SMTP 端口'},
         SMTPSettingKeys.USER: {'value': '', 'group': 'smtp', 'description': 'SMTP 用户名'},
         SMTPSettingKeys.PASSWORD: {'value': '', 'group': 'smtp', 'description': 'SMTP 密码', 'is_encrypted': True},
+        SMTPSettingKeys.SSL: {'value': 'false', 'group': 'smtp', 'description': '是否使用 SSL 直连'},
         SMTPSettingKeys.TLS: {'value': 'true', 'group': 'smtp', 'description': '是否使用 TLS'},
         SMTPSettingKeys.FROM: {'value': '', 'group': 'smtp', 'description': '发件人邮箱'},
         SMTPSettingKeys.ENABLED: {'value': 'false', 'group': 'smtp', 'description': '是否启用邮件服务'},
@@ -139,6 +140,7 @@ class SystemSettingService:
             SMTPSettingKeys.PORT,
             SMTPSettingKeys.USER,
             SMTPSettingKeys.PASSWORD,
+            SMTPSettingKeys.SSL,
             SMTPSettingKeys.TLS,
             SMTPSettingKeys.FROM,
             SMTPSettingKeys.ENABLED
@@ -148,7 +150,7 @@ class SystemSettingService:
             # 类型转换
             if key == SMTPSettingKeys.PORT:
                 value = int(value) if value else 587
-            elif key == SMTPSettingKeys.TLS:
+            elif key in {SMTPSettingKeys.SSL, SMTPSettingKeys.TLS}:
                 value = value.lower() == 'true'
             elif key == SMTPSettingKeys.ENABLED:
                 value = value.lower() == 'true'
@@ -164,6 +166,7 @@ class SystemSettingService:
         port: Optional[int] = None,
         user: Optional[str] = None,
         password: Optional[str] = None,
+        ssl: Optional[bool] = None,
         tls: Optional[bool] = None,
         from_email: Optional[str] = None,
         enabled: Optional[bool] = None,
@@ -187,6 +190,10 @@ class SystemSettingService:
         if password is not None:
             await self.set_setting(db, SMTPSettingKeys.PASSWORD, password, updated_by)
             updates['password'] = '********'
+
+        if ssl is not None:
+            await self.set_setting(db, SMTPSettingKeys.SSL, str(ssl).lower(), updated_by)
+            updates['ssl'] = ssl
         
         if tls is not None:
             await self.set_setting(db, SMTPSettingKeys.TLS, str(tls).lower(), updated_by)
@@ -225,7 +232,8 @@ class SystemSettingService:
             await aiosmtplib.connect(
                 hostname=smtp_settings[SMTPSettingKeys.HOST],
                 port=smtp_settings[SMTPSettingKeys.PORT],
-                start_tls=smtp_settings[SMTPSettingKeys.TLS]
+                use_tls=smtp_settings.get(SMTPSettingKeys.SSL, False),
+                start_tls=False if smtp_settings.get(SMTPSettingKeys.SSL, False) else smtp_settings[SMTPSettingKeys.TLS],
             )
             
             return {

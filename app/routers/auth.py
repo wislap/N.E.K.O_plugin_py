@@ -27,12 +27,9 @@ async def register(
     用户注册
     """
     try:
-        user, access_token, refresh_token, verification_email_sent = await AuthService.register_user(db, user_data)
+        user, verification_email_sent = await AuthService.register_user(db, user_data)
         return {
             "user": serialize_user(user),
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "token_type": "bearer",
             "verification_email_sent": verification_email_sent
         }
     except ValueError as e:
@@ -108,6 +105,29 @@ async def resend_verification_email(
         )
 
 
+@router.post("/auth/resend-verification-email/public", response_model=dict)
+async def resend_verification_email_public(
+    email: str = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    未登录用户按邮箱重新发送验证邮件。
+    """
+    try:
+        already_verified, sent = await email_verification_service.resend_by_email(db, email)
+        return {
+            "already_verified": already_verified,
+            "verification_email_sent": sent,
+            "message": "邮箱已验证，请直接登录" if already_verified else ("验证邮件已发送" if sent else "验证邮件发送失败，请稍后再试")
+        }
+    except ValueError as e:
+        status_code = status.HTTP_429_TOO_MANY_REQUESTS if "频繁" in str(e) else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(
+            status_code=status_code,
+            detail=str(e)
+        )
+
+
 @router.post("/auth/debug-login", response_model=dict)
 async def debug_login(
     db: AsyncSession = Depends(get_db)
@@ -123,7 +143,7 @@ async def debug_login(
 
     user = await get_or_create_debug_user(db)
     access_token = create_access_token(data={"sub": str(user.id)})
-    refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    refresh_token = await AuthService._issue_refresh_token(db, user.id, client_id="debug-auth")
     return {
         "user": serialize_user(user),
         "access_token": access_token,
@@ -145,8 +165,12 @@ async def refresh_token(
         token_value = refresh_data.refresh_token if refresh_data else refresh_token
         if not token_value:
             raise ValueError("缺少刷新令牌")
-        new_access_token = await AuthService.refresh_access_token(db, token_value)
-        return Token(access_token=new_access_token, token_type="bearer")
+        new_access_token, new_refresh_token = await AuthService.refresh_access_token(db, token_value)
+        return Token(
+            access_token=new_access_token,
+            refresh_token=new_refresh_token,
+            token_type="bearer",
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -191,10 +215,13 @@ async def change_password(
 
 @router.post("/auth/logout", response_model=MessageResponse)
 async def logout(
-    current_user: User = Depends(get_current_user)
+    refresh_data: RefreshTokenRequest | None = Body(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     用户登出（客户端需要清除令牌）
     """
-    # 这里可以实现令牌黑名单等逻辑
+    if refresh_data and refresh_data.refresh_token:
+        await AuthService.revoke_refresh_token(db, refresh_data.refresh_token)
     return MessageResponse(message="登出成功")

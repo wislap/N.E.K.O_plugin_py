@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_verified_user
 from app.models.plugin_submission import ReviewDecision, SubmissionStatus
 from app.models.user import User
 from app.schemas.common import PaginatedResponse
@@ -40,7 +40,7 @@ async def _require_owned_submission(
 @router.post("/drafts", response_model=PluginSubmission, status_code=status.HTTP_201_CREATED)
 async def create_submission_draft(
     data: SubmissionDraftCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -90,7 +90,7 @@ async def get_submission_detail(
 async def update_submission_draft(
     submission_id: int,
     data: SubmissionDraftUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     submission = await _require_owned_submission(db, submission_id, current_user)
@@ -105,7 +105,7 @@ async def update_submission_draft(
 async def create_submission_revision(
     submission_id: int,
     data: SubmissionRevisionCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     submission = await _require_owned_submission(db, submission_id, current_user)
@@ -129,7 +129,7 @@ async def create_submission_revision(
 async def submit_submission(
     submission_id: int,
     data: SubmitRequest | None = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     submission = await _require_owned_submission(db, submission_id, current_user)

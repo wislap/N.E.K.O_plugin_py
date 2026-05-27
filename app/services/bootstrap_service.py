@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import get_password_hash
+from app.core.time import utc_now
 from app.models.user import User
 
 
@@ -30,6 +31,7 @@ class BootstrapService:
                 is_active=True,
                 is_admin=True,
                 must_change_password=True,
+                email_verified_at=utc_now(),
             )
             db.add(user)
         else:
@@ -39,5 +41,6 @@ class BootstrapService:
             user.is_active = True
             user.is_admin = True
             user.must_change_password = True
+            user.email_verified_at = user.email_verified_at or utc_now()
 
         await db.commit()

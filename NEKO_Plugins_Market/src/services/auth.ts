@@ -3,6 +3,8 @@ import type {
   LoginRequest,
   LoginResponse,
   PasswordChangeRequest,
+  PublicResendVerificationRequest,
+  RegisterResponse,
   RegisterRequest,
   ResendVerificationResponse,
   User
@@ -10,7 +12,7 @@ import type {
 
 export const authApi = {
   register(data: RegisterRequest) {
-    return post<LoginResponse>("/auth/register", data);
+    return post<RegisterResponse>("/auth/register", data);
   },
 
   debugLogin() {
@@ -37,7 +39,15 @@ export const authApi = {
     return post<ResendVerificationResponse>("/auth/resend-verification-email");
   },
 
+  resendVerificationEmailPublic(data: PublicResendVerificationRequest) {
+    return post<ResendVerificationResponse>("/auth/resend-verification-email/public", data);
+  },
+
   logout() {
-    return post<{ message: string }>("/auth/logout");
+    const refreshToken = localStorage.getItem("refreshToken");
+    return post<{ message: string }>(
+      "/auth/logout",
+      refreshToken ? { refresh_token: refreshToken } : undefined,
+    );
   }
 };

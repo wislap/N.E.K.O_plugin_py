@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("ENVIRONMENT", "development")
+os.environ.setdefault("EMAIL_DELIVERY_MODE", "log")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.database import Base, get_db
@@ -17,6 +18,7 @@ from app.main import app
 from app.models import User
 from app.models.permission import Permission, PermissionGroup, permission_group_items, user_permission_groups
 from app.core.security import get_password_hash
+from app.core.time import utc_now
 
 
 @pytest_asyncio.fixture()
@@ -60,8 +62,9 @@ async def create_test_user(
     db: AsyncSession,
     username: str = "admin",
     email: str = "admin@example.com",
-    password: str = "password123",
+    password: str = "Str0ngPass!42",
     is_admin: bool = False,
+    email_verified: bool = True,
 ) -> User:
     user = User(
         username=username,
@@ -69,6 +72,7 @@ async def create_test_user(
         hashed_password=get_password_hash(password),
         is_admin=is_admin,
         is_active=True,
+        email_verified_at=utc_now() if email_verified else None,
     )
     db.add(user)
     await db.commit()
@@ -249,7 +253,7 @@ async def make_plugin(db_session: AsyncSession):
     return _factory
 
 
-async def login(client, username: str, password: str = "password123") -> str:
+async def login(client, username: str, password: str = "Str0ngPass!42") -> str:
     """登录并返回 access_token。"""
     response = await client.post(
         "/api/v1/auth/login",

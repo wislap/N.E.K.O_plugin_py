@@ -1,15 +1,52 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import PermissionChecker
+from app.models.auth_session import RefreshTokenSession
+from app.models.email_verification import EmailVerificationToken
+from app.models.notification import Notification
+from app.models.permission import PermissionAuditLog, user_permission_groups
+from app.models.plugin import Plugin
+from app.models.plugin_rating import PluginRating
+from app.models.plugin_submission import (
+    PluginReviewCase,
+    PluginReviewComment,
+    PluginReviewEvent,
+    PluginSubmission,
+)
+from app.models.review import Review
 from app.models.user import User as UserModel
+from app.models.user_plugin_install import UserPluginInstall
 from app.schemas.common import MessageResponse, PaginatedResponse
 from app.schemas.user import User, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["admin-users"])
 require_user_management = PermissionChecker("system:user")
+
+
+async def _count_user_business_refs(db: AsyncSession, user_id: int) -> dict[str, int]:
+    checks = {
+        "插件": select(func.count(Plugin.id)).where(Plugin.author_id == user_id),
+        "插件评论": select(func.count(Review.id)).where(Review.author_id == user_id),
+        "插件评分": select(func.count(PluginRating.id)).where(PluginRating.reviewer_id == user_id),
+        "审核提交": select(func.count(PluginSubmission.id)).where(PluginSubmission.author_id == user_id),
+        "审核任务": select(func.count(PluginReviewCase.id)).where(
+            or_(PluginReviewCase.opened_by == user_id, PluginReviewCase.closed_by == user_id)
+        ),
+        "审核评论": select(func.count(PluginReviewComment.id)).where(
+            or_(PluginReviewComment.author_id == user_id, PluginReviewComment.resolved_by == user_id)
+        ),
+        "审核事件": select(func.count(PluginReviewEvent.id)).where(PluginReviewEvent.actor_id == user_id),
+        "权限审计日志": select(func.count(PermissionAuditLog.id)).where(PermissionAuditLog.operator_id == user_id),
+    }
+    refs: dict[str, int] = {}
+    for label, query in checks.items():
+        count = (await db.execute(query)).scalar() or 0
+        if count:
+            refs[label] = count
+    return refs
 
 
 @router.get("", response_model=PaginatedResponse[User])
@@ -133,6 +170,18 @@ async def delete_user(
         if admin_count <= 1:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能删除最后一个管理员")
 
+    refs = await _count_user_business_refs(db, user.id)
+    if refs:
+        detail = "用户存在业务数据，不能直接删除：" + "、".join(
+            f"{label} {count} 条" for label, count in refs.items()
+        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+
+    await db.execute(delete(EmailVerificationToken).where(EmailVerificationToken.user_id == user.id))
+    await db.execute(delete(RefreshTokenSession).where(RefreshTokenSession.user_id == user.id))
+    await db.execute(delete(Notification).where(Notification.user_id == user.id))
+    await db.execute(delete(UserPluginInstall).where(UserPluginInstall.user_id == user.id))
+    await db.execute(delete(user_permission_groups).where(user_permission_groups.c.user_id == user.id))
     await db.delete(user)
     await db.commit()
     return MessageResponse(message="用户已删除")

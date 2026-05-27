@@ -61,13 +61,16 @@ async function refreshAccessToken(requestId: string) {
       return null;
     }
 
-    const data = await response.json() as { access_token?: string };
+    const data = await response.json() as { access_token?: string; refresh_token?: string | null };
     if (!data.access_token) {
       clearSession();
       return null;
     }
 
     localStorage.setItem("token", data.access_token);
+    if (data.refresh_token) {
+      localStorage.setItem("refreshToken", data.refresh_token);
+    }
     window.dispatchEvent(new Event("auth:changed"));
     return data.access_token;
   } catch {

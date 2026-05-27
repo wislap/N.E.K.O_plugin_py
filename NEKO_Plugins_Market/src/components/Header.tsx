@@ -183,7 +183,19 @@ export function Header() {
     ? [...navLinks.slice(0, 3), { label: '我的插件', href: '/my/plugins' }, navLinks[3]]
     : navLinks;
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await authApi.logout();
+    } catch (error) {
+      logError(error, {
+        title: '登出同步失败',
+        severity: 'warn',
+        context: {
+          module: 'header',
+          action: 'logout'
+        }
+      });
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('currentUser');

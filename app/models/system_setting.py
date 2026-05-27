@@ -42,6 +42,7 @@ class SMTPSettingKeys:
     PORT = 'smtp_port'
     USER = 'smtp_user'
     PASSWORD = 'smtp_password'
+    SSL = 'smtp_ssl'
     TLS = 'smtp_tls'
     FROM = 'smtp_from'
     ENABLED = 'smtp_enabled'

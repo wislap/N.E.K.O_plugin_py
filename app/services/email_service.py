@@ -27,26 +27,50 @@ class EmailService:
     
     def __init__(self):
         self._db_session = None
-    
-    async def _get_smtp_config(self) -> dict:
-        """从数据库获取 SMTP 配置"""
-        if self._db_session:
-            return await system_setting_service.get_smtp_settings(self._db_session)
-        
-        # 如果没有数据库会话，使用环境变量配置
+
+    def _get_env_smtp_config(self) -> dict:
         return {
             'smtp_host': getattr(settings, 'SMTP_HOST', None),
             'smtp_port': getattr(settings, 'SMTP_PORT', 587),
             'smtp_user': getattr(settings, 'SMTP_USER', None),
             'smtp_password': getattr(settings, 'SMTP_PASSWORD', None),
+            'smtp_ssl': getattr(settings, 'SMTP_SSL', False),
             'smtp_tls': getattr(settings, 'SMTP_TLS', True),
             'smtp_from': getattr(settings, 'SMTP_FROM', None),
             'smtp_enabled': bool(getattr(settings, 'SMTP_HOST', None))
         }
+
+    @staticmethod
+    def _delivery_mode() -> str:
+        return settings.EMAIL_DELIVERY_MODE.strip().lower()
+    
+    async def _get_smtp_config(self) -> dict:
+        """从数据库获取 SMTP 配置"""
+        if self._db_session:
+            db_config = await system_setting_service.get_smtp_settings(self._db_session)
+            if db_config.get('smtp_enabled'):
+                return db_config
+        
+        # 如果没有数据库会话，使用环境变量配置
+        return self._get_env_smtp_config()
     
     def set_db_session(self, db_session):
         """设置数据库会话（用于从管理后台读取配置）"""
         self._db_session = db_session
+
+    async def is_configured(self) -> bool:
+        """Return whether the configured mail delivery mode can send messages."""
+        mode = self._delivery_mode()
+        if mode == "log":
+            return True
+        if mode != "smtp":
+            return False
+
+        smtp_config = await self._get_smtp_config()
+        required_fields = ['smtp_host', 'smtp_user', 'smtp_password', 'smtp_from']
+        return bool(smtp_config.get('smtp_enabled')) and all(
+            bool(smtp_config.get(field)) for field in required_fields
+        )
     
     async def _send_email(
         self,
@@ -69,6 +93,20 @@ class EmailService:
         """
         # 获取 SMTP 配置
         smtp_config = await self._get_smtp_config()
+        mode = self._delivery_mode()
+
+        if mode == "log":
+            logger.warning(
+                "邮件日志投递模式: to=%s subject=%s text=%s",
+                to_email,
+                subject,
+                text_content or html_content,
+            )
+            return True
+
+        if mode != "smtp":
+            logger.warning("邮件投递未启用，当前 EMAIL_DELIVERY_MODE=%s", settings.EMAIL_DELIVERY_MODE)
+            return False
         
         # 检查是否启用
         if not smtp_config.get('smtp_enabled'):
@@ -103,7 +141,9 @@ class EmailService:
                 message.attach(MIMEText(html_content, "html", "utf-8"))
                 
                 # 连接 SMTP 服务器
-                if smtp_config['smtp_tls']:
+                if smtp_config.get('smtp_ssl'):
+                    server = smtplib.SMTP_SSL(smtp_config['smtp_host'], smtp_config['smtp_port'])
+                elif smtp_config['smtp_tls']:
                     server = smtplib.SMTP(smtp_config['smtp_host'], smtp_config['smtp_port'])
                     server.starttls()
                 else:

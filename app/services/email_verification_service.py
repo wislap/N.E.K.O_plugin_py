@@ -94,6 +94,18 @@ class EmailVerificationService:
                     token.sent_at = utc_now()
         return sent
 
+    async def ensure_delivery_available(self, db: AsyncSession) -> None:
+        email_service.set_db_session(db)
+        if not await email_service.is_configured():
+            raise ValueError("邮箱验证服务未配置，请稍后再试或联系管理员")
+
+    async def resend_by_email(self, db: AsyncSession, email: str) -> tuple[bool, bool]:
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise ValueError("未找到使用该邮箱注册的账号")
+        return await self.resend(db, user)
+
     async def resend(self, db: AsyncSession, user: User) -> tuple[bool, bool]:
         if user.email_verified_at is not None:
             return True, False
@@ -122,22 +134,25 @@ class EmailVerificationService:
         result = await db.execute(
             select(EmailVerificationToken).where(
                 EmailVerificationToken.token_hash == token_hash,
-                EmailVerificationToken.is_active == True,
-                EmailVerificationToken.used_at.is_(None),
             )
         )
         token = result.scalar_one_or_none()
         if not token or not hmac.compare_digest(token.token_hash, token_hash):
             raise ValueError("验证链接无效或已使用")
 
+        user = await db.get(User, token.user_id)
+        if not user:
+            raise ValueError("用户不存在")
+
+        if token.used_at is not None or not token.is_active:
+            if user.email_verified_at is not None:
+                return user
+            raise ValueError("验证链接无效或已使用")
+
         if token.expires_at < utc_now():
             async with commit_or_rollback(db):
                 token.is_active = False
             raise ValueError("验证链接已过期，请重新发送验证邮件")
-
-        user = await db.get(User, token.user_id)
-        if not user:
-            raise ValueError("用户不存在")
 
         async with commit_or_rollback(db):
             user.email_verified_at = utc_now()

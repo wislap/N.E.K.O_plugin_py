@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_verified_user
 from app.errors.version_errors import VersionDomainError
 from app.models.plugin import Plugin
 from app.models.user import User
@@ -108,7 +108,7 @@ async def list_plugin_versions(
 async def list_release_candidates(
     plugin_id: int,
     limit: int = Query(default=10, ge=1, le=30),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     """列出插件 GitHub 仓库最近的 releases，用于前端自动填充发版 URL。"""
@@ -189,7 +189,7 @@ async def get_latest_plugin_version(
 async def publish_version_from_release(
     plugin_id: int,
     body: VersionPublishRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     """作者 / 管理员通过 GitHub release URL 发版。
