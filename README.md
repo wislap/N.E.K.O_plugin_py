@@ -155,11 +155,11 @@ npm run build
 
 ### 7. Docker Compose 开发环境
 
-项目提供开发版 Compose，用于快速带走和本地联调：
+项目提供开发版 Compose，可以替代手动启动 `uvicorn` 和 `npm run dev`：
 
 ```bash
 cd /home/yun_wan/python_programe/neko_plugin_market/N.E.K.O_plugin_py
-docker compose up --build
+scripts/dev_compose.sh up
 ```
 
 启动后访问：
@@ -167,6 +167,20 @@ docker compose up --build
 - 前端：http://localhost:5173/
 - 后端：http://localhost:8000/
 - API 文档：http://localhost:8000/docs
+
+后台运行、查看日志、停止：
+
+```bash
+scripts/dev_compose.sh up-d
+scripts/dev_compose.sh logs
+scripts/dev_compose.sh down
+```
+
+如果要清掉开发容器数据库 volume 后重新启动：
+
+```bash
+scripts/dev_compose.sh reset
+```
 
 Compose 会将 SQLite 数据库保存到 `backend_data` volume：
 
@@ -187,7 +201,7 @@ VITE_API_BASE_URL=http://localhost:8000/api/v1
 ```bash
 cp .env.production.example .env.production
 # 编辑 SECRET_KEY / INITIAL_ADMIN_PASSWORD / MARKET_SITE_ADDRESS / ALLOWED_HOSTS
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+scripts/prod_compose.sh up
 ```
 
 生产版包含：
@@ -202,7 +216,7 @@ docker compose --env-file .env.production -f docker-compose.prod.yml up -d --bui
 在线备份：
 
 ```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml run --rm backup
+scripts/prod_compose.sh backup
 ```
 
 更多细节见 `docs/production-deploy.md`。

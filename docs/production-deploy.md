@@ -58,7 +58,7 @@ ALLOWED_HOSTS=["http://localhost:18080"]
 3. Build and start:
 
 ```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+scripts/prod_compose.sh up
 ```
 
 The `migrate` service runs `alembic upgrade head` before the backend starts.
@@ -68,7 +68,7 @@ The `migrate` service runs `alembic upgrade head` before the backend starts.
 Run an online SQLite backup without stopping the backend:
 
 ```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml run --rm backup
+scripts/prod_compose.sh backup
 ```
 
 The backup is written to the `market_backups` volume as:

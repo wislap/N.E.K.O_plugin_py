@@ -7,6 +7,12 @@ services:
       ENVIRONMENT: development
       SECRET_KEY: dev-only-change-me
       DATABASE_URL: sqlite+aiosqlite:////data/plugin_market.db
+      DEV_AUTO_CREATE_TABLES: "true"
+      FRONTEND_BASE_URL: http://localhost:5173
+      EMAIL_DELIVERY_MODE: log
+      INITIAL_ADMIN_USERNAME: root
+      INITIAL_ADMIN_EMAIL: root@example.com
+      INITIAL_ADMIN_PASSWORD: password
       AI_API_BASE: https://api.openai.com/v1
       AI_MODEL: gpt-4
     volumes:
