@@ -1,10 +1,12 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, desc, asc
+from sqlalchemy import select, func, and_, or_, desc, asc, delete, update
 from sqlalchemy.orm import selectinload
 from typing import Optional, List
 
 from app.models.plugin import Plugin, PluginStatus
 from app.models.category import Category
+from app.models.plugin_signature import PluginSignature
+from app.models.plugin_submission import PluginSubmission
 from app.core.time import utc_now
 from app.schemas.plugin import PluginUpdate, PluginSearchParams
 from app.schemas.common import PaginatedResponse
@@ -171,6 +173,12 @@ class PluginService:
     @staticmethod
     async def delete_plugin(db: AsyncSession, plugin: Plugin) -> None:
         """删除插件"""
+        await db.execute(
+            update(PluginSubmission)
+            .where(PluginSubmission.plugin_id == plugin.id)
+            .values(plugin_id=None)
+        )
+        await db.execute(delete(PluginSignature).where(PluginSignature.plugin_id == plugin.id))
         await db.delete(plugin)
         await db.commit()
     

@@ -8,6 +8,7 @@ export const adminPageModules = {
   reviewOverview: () => import("@/pages/admin/ReviewOverview"),
   reviewWorkspace: () => import("@/pages/admin/ReviewWorkspace"),
   reviewArchive: () => import("@/pages/admin/ReviewArchive"),
+  plugins: () => import("@/pages/admin/Plugins"),
   users: () => import("@/pages/admin/Users"),
   permissions: () => import("@/pages/admin/Permissions"),
   smtp: () => import("@/pages/admin/SMTP"),
@@ -55,6 +56,7 @@ export function preloadAdminRouteModule(pathname: string) {
   if (pathname === "/admin/review/overview") return adminPageModules.reviewOverview();
   if (pathname === "/admin/review/workspace") return adminPageModules.reviewWorkspace();
   if (pathname === "/admin/review/archive") return adminPageModules.reviewArchive();
+  if (pathname === "/admin/plugins") return adminPageModules.plugins();
   if (pathname === "/admin/users") return adminPageModules.users();
   if (pathname === "/admin/permissions") return adminPageModules.permissions();
   if (pathname === "/admin/smtp") return adminPageModules.smtp();

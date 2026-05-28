@@ -24,6 +24,7 @@ from app.routers.admin import categories as admin_categories
 from app.routers.admin import dashboard as admin_dashboard
 from app.routers.admin import logs as admin_logs
 from app.routers.admin import permissions as admin_permissions
+from app.routers.admin import plugins as admin_plugins
 from app.routers.admin import review as admin_review
 from app.routers.admin import settings as admin_settings
 from app.routers.admin import signatures as admin_signatures
@@ -101,6 +102,7 @@ app.include_router(me_installs.router, prefix="/api/v1", tags=["me-installs"])
 app.include_router(admin_dashboard.router, prefix="/api/v1/admin", tags=["admin-dashboard"])
 app.include_router(admin_review.router, prefix="/api/v1/admin", tags=["admin-review"])
 app.include_router(admin_users.router, prefix="/api/v1/admin", tags=["admin-users"])
+app.include_router(admin_plugins.router, prefix="/api/v1/admin", tags=["admin-plugins"])
 app.include_router(admin_permissions.router, prefix="/api/v1/admin", tags=["admin-permissions"])
 app.include_router(admin_categories.router, prefix="/api/v1/admin", tags=["admin-categories"])
 app.include_router(admin_zones.router, prefix="/api/v1/admin", tags=["admin-zones"])

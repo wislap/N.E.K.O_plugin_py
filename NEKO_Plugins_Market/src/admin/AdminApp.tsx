@@ -11,6 +11,7 @@ const AdminDashboard = lazy(adminPageModules.dashboard);
 const ReviewOverview = lazy(adminPageModules.reviewOverview);
 const ReviewWorkspace = lazy(adminPageModules.reviewWorkspace);
 const ReviewArchive = lazy(adminPageModules.reviewArchive);
+const AdminPlugins = lazy(adminPageModules.plugins);
 const AdminUsers = lazy(adminPageModules.users);
 const AdminPermissions = lazy(adminPageModules.permissions);
 const AdminSMTP = lazy(adminPageModules.smtp);
@@ -57,6 +58,7 @@ function AdminRouteTree() {
         <Route path="review/overview" element={withPageSuspense(<ReviewOverview />)} />
         <Route path="review/workspace" element={withPageSuspense(<ReviewWorkspace />)} />
         <Route path="review/archive" element={withPageSuspense(<ReviewArchive />)} />
+        <Route path="plugins" element={withPageSuspense(<AdminPlugins />)} />
         <Route path="users" element={withPageSuspense(<AdminUsers />)} />
         <Route path="permissions" element={withPageSuspense(<AdminPermissions />)} />
         <Route path="smtp" element={withPageSuspense(<AdminSMTP />)} />
