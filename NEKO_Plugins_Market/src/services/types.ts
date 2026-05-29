@@ -41,6 +41,7 @@ export interface Plugin {
   tags?: string[];
   download_count: number;
   likes: number;
+  liked_by_current_user: boolean;
   rating_average: number;
   rating_count: number;
   status: "approved" | "disabled" | string;
@@ -48,6 +49,15 @@ export interface Plugin {
   created_at: string;
   updated_at: string;
   published_at?: string | null;
+  ai_rating?: RatingSummary | null;
+  admin_rating?: RatingSummary | null;
+}
+
+export interface RatingSummary {
+  functionality: "S" | "A" | "B" | "C" | "D";
+  security: "S" | "A" | "B" | "C" | "D";
+  documentation: "S" | "A" | "B" | "C" | "D";
+  ratedAt?: string | null;
 }
 
 export interface UserPluginInstall {
@@ -256,7 +266,6 @@ export interface VersionYankResponse {
 }
 
 export interface ReviewCreateRequest {
-  rating: number;
   title?: string;
   content?: string;
 }
@@ -265,7 +274,7 @@ export type PluginQuery = {
   q?: string;
   category?: string;
   author?: string;
-  sort_by?: "created_at" | "download_count" | "rating_average" | "name";
+  sort_by?: "created_at" | "download_count" | "likes" | "name";
   sort_order?: "asc" | "desc";
   featured_only?: boolean;
   page?: number;
@@ -275,7 +284,6 @@ export type PluginQuery = {
 export interface ReviewDto {
   id: number;
   plugin_id: number;
-  rating: number;
   title?: string | null;
   content?: string | null;
   created_at: string;

@@ -4,6 +4,7 @@ from sqlalchemy.orm import selectinload
 from typing import Optional, List
 
 from app.models.plugin import Plugin, PluginStatus
+from app.models.plugin_like import PluginLike
 from app.models.category import Category
 from app.models.plugin_signature import PluginSignature
 from app.models.plugin_submission import PluginSubmission
@@ -23,17 +24,51 @@ class PluginService:
                 selectinload(Plugin.categories),
                 selectinload(Plugin.author),
                 selectinload(Plugin.zone),
+                selectinload(Plugin.ratings),
             )
             .where(Plugin.id == plugin_id)
         )
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def has_user_liked(db: AsyncSession, plugin_id: int, user_id: int) -> bool:
+        result = await db.execute(
+            select(PluginLike.id).where(
+                and_(PluginLike.plugin_id == plugin_id, PluginLike.user_id == user_id)
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
+    @staticmethod
+    async def attach_liked_by_current_user(
+        db: AsyncSession,
+        plugins: List[Plugin],
+        user_id: Optional[int],
+    ) -> None:
+        if not user_id:
+            for plugin in plugins:
+                plugin.__dict__["liked_by_current_user"] = False
+            return
+
+        plugin_ids = [plugin.id for plugin in plugins]
+        if not plugin_ids:
+            return
+
+        result = await db.execute(
+            select(PluginLike.plugin_id).where(
+                and_(PluginLike.user_id == user_id, PluginLike.plugin_id.in_(plugin_ids))
+            )
+        )
+        liked_ids = set(result.scalars().all())
+        for plugin in plugins:
+            plugin.__dict__["liked_by_current_user"] = plugin.id in liked_ids
     
     @staticmethod
     async def get_plugin_by_slug(db: AsyncSession, slug: str) -> Optional[Plugin]:
         """通过slug获取插件"""
         result = await db.execute(
             select(Plugin)
-            .options(selectinload(Plugin.zone))
+            .options(selectinload(Plugin.zone), selectinload(Plugin.ratings))
             .where(Plugin.slug == slug)
         )
         return result.scalar_one_or_none()
@@ -50,6 +85,7 @@ class PluginService:
         query = select(Plugin).options(
             selectinload(Plugin.categories),
             selectinload(Plugin.zone),
+            selectinload(Plugin.ratings),
         )
         
         # 构建过滤条件
@@ -128,6 +164,7 @@ class PluginService:
             .options(
                 selectinload(Plugin.categories),
                 selectinload(Plugin.zone),
+                selectinload(Plugin.ratings),
             )
             .where(Plugin.author_id == author_id)
             .order_by(desc(Plugin.created_at))
@@ -198,6 +235,30 @@ class PluginService:
         if plugin:
             plugin.download_count += 1
             await db.commit()
+
+    @staticmethod
+    async def set_like(db: AsyncSession, plugin_id: int, user_id: int, liked: bool) -> tuple[bool, int]:
+        plugin = await db.get(Plugin, plugin_id)
+        if not plugin:
+            raise ValueError("插件不存在")
+
+        result = await db.execute(
+            select(PluginLike).where(
+                and_(PluginLike.plugin_id == plugin_id, PluginLike.user_id == user_id)
+            )
+        )
+        existing = result.scalar_one_or_none()
+
+        if liked and existing is None:
+            db.add(PluginLike(plugin_id=plugin_id, user_id=user_id))
+            plugin.likes = (plugin.likes or 0) + 1
+        elif not liked and existing is not None:
+            await db.delete(existing)
+            plugin.likes = max((plugin.likes or 0) - 1, 0)
+
+        await db.commit()
+        await db.refresh(plugin)
+        return liked, plugin.likes or 0
     
     @staticmethod
     async def update_rating(db: AsyncSession, plugin_id: int, commit: bool = True) -> None:
@@ -226,6 +287,7 @@ class PluginService:
             .options(
                 selectinload(Plugin.categories),
                 selectinload(Plugin.zone),
+                selectinload(Plugin.ratings),
             )
             .where(
                 and_(
@@ -246,6 +308,7 @@ class PluginService:
             .options(
                 selectinload(Plugin.categories),
                 selectinload(Plugin.zone),
+                selectinload(Plugin.ratings),
             )
             .where(Plugin.status == PluginStatus.APPROVED)
             .order_by(desc(Plugin.download_count))
@@ -261,6 +324,7 @@ class PluginService:
             .options(
                 selectinload(Plugin.categories),
                 selectinload(Plugin.zone),
+                selectinload(Plugin.ratings),
             )
             .where(Plugin.status == PluginStatus.APPROVED)
             .order_by(desc(Plugin.created_at))

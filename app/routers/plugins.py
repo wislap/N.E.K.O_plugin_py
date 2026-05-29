@@ -3,11 +3,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List
 
 from app.core.database import get_db
-from app.core.security import get_current_user, require_verified_user
+from app.core.security import get_current_user, get_current_user_optional, require_verified_user
 from app.models.user import User
 from app.schemas.plugin import (
     PluginUpdate, PluginList, PluginDetail,
-    PluginSearchParams, Plugin as PluginSchema
+    PluginSearchParams, Plugin as PluginSchema, PluginLikeState
 )
 from app.schemas.common import PaginatedResponse, MessageResponse
 from app.services.plugin_projection import (
@@ -31,7 +31,8 @@ async def list_plugins(
     featured_only: bool = Query(False, description="仅显示推荐插件"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
     获取公开插件列表，支持搜索和筛选。
@@ -56,45 +57,60 @@ async def list_plugins(
     
     result = await PluginService.get_plugins(db, params, page, page_size)
     await attach_latest_version(db, result.items)
+    await PluginService.attach_liked_by_current_user(
+        db, result.items, current_user.id if current_user else None
+    )
     return result
 
 
 @router.get("/plugins/featured", response_model=List[PluginList])
 async def get_featured_plugins(
     limit: int = Query(10, ge=1, le=50),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
     获取推荐插件列表
     """
     plugins = await PluginService.get_featured_plugins(db, limit)
     await attach_latest_version(db, plugins)
+    await PluginService.attach_liked_by_current_user(
+        db, plugins, current_user.id if current_user else None
+    )
     return plugins
 
 
 @router.get("/plugins/popular", response_model=List[PluginList])
 async def get_popular_plugins(
     limit: int = Query(10, ge=1, le=50),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
     获取热门插件列表（按下载量排序）
     """
     plugins = await PluginService.get_popular_plugins(db, limit)
     await attach_latest_version(db, plugins)
+    await PluginService.attach_liked_by_current_user(
+        db, plugins, current_user.id if current_user else None
+    )
     return plugins
 
 
 @router.get("/plugins/newest", response_model=List[PluginList])
 async def get_newest_plugins(
     limit: int = Query(10, ge=1, le=50),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
     获取最新插件列表
     """
     plugins = await PluginService.get_newest_plugins(db, limit)
     await attach_latest_version(db, plugins)
+    await PluginService.attach_liked_by_current_user(
+        db, plugins, current_user.id if current_user else None
+    )
     return plugins
 
 
@@ -108,13 +124,15 @@ async def get_my_plugins(
     """
     plugins = await PluginService.get_plugins_by_author(db, current_user.id)
     await attach_latest_version(db, plugins)
+    await PluginService.attach_liked_by_current_user(db, plugins, current_user.id)
     return plugins
 
 
 @router.get("/plugins/{plugin_id}", response_model=PluginDetail)
 async def get_plugin(
     plugin_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
     获取插件详情
@@ -126,13 +144,17 @@ async def get_plugin(
             detail="插件不存在或尚未发布"
         )
     await attach_latest_version_single(db, plugin)
+    await PluginService.attach_liked_by_current_user(
+        db, [plugin], current_user.id if current_user else None
+    )
     return plugin
 
 
 @router.get("/plugins/slug/{slug}", response_model=PluginDetail)
 async def get_plugin_by_slug(
     slug: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
     通过slug获取插件详情
@@ -144,6 +166,9 @@ async def get_plugin_by_slug(
             detail="插件不存在或尚未发布"
         )
     await attach_latest_version_single(db, plugin)
+    await PluginService.attach_liked_by_current_user(
+        db, [plugin], current_user.id if current_user else None
+    )
     return plugin
 
 
@@ -220,3 +245,24 @@ async def record_download(
     
     await PluginService.increment_download_count(db, plugin_id)
     return MessageResponse(message="下载记录已更新")
+
+
+@router.put("/plugins/{plugin_id}/like", response_model=PluginLikeState)
+async def set_plugin_like(
+    plugin_id: int,
+    liked: bool = True,
+    current_user: User = Depends(require_verified_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    点赞或取消点赞插件。
+    """
+    plugin = await PluginService.get_plugin_by_id(db, plugin_id)
+    if not plugin or plugin.status != PluginStatus.APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="插件不存在或尚未发布"
+        )
+
+    _, likes = await PluginService.set_like(db, plugin_id, current_user.id, liked)
+    return PluginLikeState(plugin_id=plugin_id, liked=liked, likes=likes)

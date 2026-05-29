@@ -9,7 +9,7 @@ export interface AdminPluginListParams extends Record<string, unknown> {
   q?: string;
   status?: string;
   author?: string;
-  sort_by?: "created_at" | "download_count" | "rating_average" | "name";
+  sort_by?: "created_at" | "download_count" | "likes" | "name";
   sort_order?: "asc" | "desc";
   featured_only?: boolean;
   page?: number;

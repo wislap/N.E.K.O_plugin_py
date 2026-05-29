@@ -63,6 +63,7 @@ class Plugin(Base):
     zone = relationship("Zone", back_populates="plugins")
     ratings = relationship("PluginRating", back_populates="plugin", cascade="all, delete-orphan")
     user_installs = relationship("UserPluginInstall", back_populates="plugin", cascade="all, delete-orphan")
+    user_likes = relationship("PluginLike", back_populates="plugin", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Plugin(id={self.id}, name='{self.name}', status='{self.status}')>"

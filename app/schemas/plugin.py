@@ -72,6 +72,13 @@ class PluginAuthor(BaseModel):
     avatar_url: Optional[str]
 
 
+class RatingSummary(BaseModel):
+    functionality: str
+    security: str
+    documentation: str
+    ratedAt: Optional[str] = None
+
+
 class Plugin(BaseModel):
     """对外暴露的 Plugin 对象。
 
@@ -97,6 +104,7 @@ class Plugin(BaseModel):
     tags: List[str]
     download_count: int
     likes: int
+    liked_by_current_user: bool = False
     rating_average: float
     rating_count: int
     status: PluginStatus
@@ -105,6 +113,8 @@ class Plugin(BaseModel):
     updated_at: datetime
     published_at: Optional[datetime]
     latest_version: Optional[LatestVersionPublic] = None
+    ai_rating: Optional[RatingSummary] = None
+    admin_rating: Optional[RatingSummary] = None
 
 
 class PluginList(Plugin):
@@ -126,8 +136,14 @@ class PluginSearchParams(BaseModel):
     author: Optional[str] = None
     sort_by: Optional[str] = Field(
         "created_at",
-        pattern="^(created_at|download_count|rating_average|name)$",
+        pattern="^(created_at|download_count|likes|name)$",
     )
     sort_order: Optional[str] = Field("desc", pattern="^(asc|desc)$")
     status: Optional[PluginStatus] = None
     featured_only: Optional[bool] = False
+
+
+class PluginLikeState(BaseModel):
+    plugin_id: int
+    liked: bool
+    likes: int

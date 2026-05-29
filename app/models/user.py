@@ -38,6 +38,11 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    plugin_likes = relationship(
+        "PluginLike",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     
     # 权限组关系
     permission_groups = relationship(

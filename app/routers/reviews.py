@@ -42,7 +42,7 @@ async def get_rating_distribution(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    获取插件评分分布
+    用户侧星级评分已下线，保留此响应用于旧客户端兼容。
     """
     plugin = await PluginService.get_plugin_by_id(db, plugin_id)
     if not plugin or plugin.status != PluginStatus.APPROVED:
@@ -51,11 +51,10 @@ async def get_rating_distribution(
             detail="插件不存在或尚未发布"
         )
     
-    distribution = await ReviewService.get_rating_distribution(db, plugin_id)
     return {
-        "distribution": distribution,
-        "average": plugin.rating_average,
-        "total": plugin.rating_count
+        "distribution": {},
+        "average": None,
+        "total": 0
     }
 
 
@@ -67,7 +66,7 @@ async def create_review(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    为插件创建评分和评论（需要登录，每个插件只能评分一次）
+    为插件创建评论（需要登录，每个插件只能评论一次）
     """
     # 检查插件是否存在
     plugin = await PluginService.get_plugin_by_id(db, plugin_id)
@@ -83,7 +82,6 @@ async def create_review(
             db,
             plugin_id=plugin_id,
             author_id=current_user.id,
-            rating=review_data.rating,
             title=review_data.title,
             content=review_data.content
         )
@@ -121,7 +119,6 @@ async def update_review(
     updated_review = await ReviewService.update_review(
         db,
         review,
-        rating=update_data.rating,
         title=update_data.title,
         content=update_data.content
     )

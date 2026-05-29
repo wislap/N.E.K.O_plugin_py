@@ -12,8 +12,8 @@ class Review(Base):
     plugin_id = Column(Integer, ForeignKey("plugins.id"), nullable=False)
     author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     
-    # 评分 1-5
-    rating = Column(Float, nullable=False)
+    # Deprecated: user-facing star ratings have been retired.
+    rating = Column(Float, nullable=True)
     title = Column(String(100), nullable=True)
     content = Column(Text, nullable=True)
     
@@ -25,10 +25,10 @@ class Review(Base):
     plugin = relationship("Plugin", back_populates="reviews")
     author = relationship("User", back_populates="reviews")
     
-    # 一个用户只能对一个插件评分一次
+    # 一个用户只能对一个插件评论一次
     __table_args__ = (
         UniqueConstraint('plugin_id', 'author_id', name='unique_user_plugin_review'),
     )
     
     def __repr__(self):
-        return f"<Review(id={self.id}, plugin_id={self.plugin_id}, rating={self.rating})>"
+        return f"<Review(id={self.id}, plugin_id={self.plugin_id})>"

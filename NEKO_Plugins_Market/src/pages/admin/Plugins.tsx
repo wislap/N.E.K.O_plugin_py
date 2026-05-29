@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  ThumbsUp,
   ExternalLink,
   MoreHorizontal,
   Package,
@@ -56,7 +57,7 @@ import { notifySuccess, reportError } from "@/lib/error-reporting";
 
 type StatusFilter = "all" | "approved" | "disabled";
 type FeaturedFilter = "all" | "featured";
-type SortValue = "created_at:desc" | "created_at:asc" | "download_count:desc" | "rating_average:desc" | "name:asc";
+type SortValue = "created_at:desc" | "created_at:asc" | "download_count:desc" | "likes:desc" | "name:asc";
 
 const statusLabels: Record<string, string> = {
   approved: "已发布",
@@ -115,7 +116,7 @@ export default function AdminPlugins() {
         q: debouncedSearch || undefined,
         status: status === "all" ? undefined : status,
         featured_only: featured === "featured" ? true : undefined,
-        sort_by: sortBy as "created_at" | "download_count" | "rating_average" | "name",
+        sort_by: sortBy as "created_at" | "download_count" | "likes" | "name",
         sort_order: sortOrder,
         page,
         page_size: pageSize
@@ -233,7 +234,7 @@ export default function AdminPlugins() {
                 <SelectItem value="created_at:desc">最新创建</SelectItem>
                 <SelectItem value="created_at:asc">最早创建</SelectItem>
                 <SelectItem value="download_count:desc">下载最多</SelectItem>
-                <SelectItem value="rating_average:desc">评分最高</SelectItem>
+                <SelectItem value="likes:desc">点赞最多</SelectItem>
                 <SelectItem value="name:asc">名称 A-Z</SelectItem>
               </SelectContent>
             </Select>
@@ -332,7 +333,10 @@ export default function AdminPlugins() {
                             <Download className="h-3.5 w-3.5" />
                             {plugin.download_count}
                           </div>
-                          <div>{plugin.rating_average.toFixed(1)} 分 / {plugin.rating_count} 条</div>
+                          <div className="flex items-center gap-1">
+                            <ThumbsUp className="h-3.5 w-3.5" />
+                            {plugin.likes}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>

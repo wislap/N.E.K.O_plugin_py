@@ -3,9 +3,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Plugin, Review
+from app.models import Plugin, PluginLike, Review
 from app.services.notification_service import NotificationService
-from app.services.plugin_service import PluginService
 from tests.conftest import create_test_user
 
 
@@ -81,14 +80,14 @@ async def test_reviews_require_login_and_owner_for_mutations(
 
     anonymous_create = await client.post(
         f"/api/v1/plugins/{plugin['id']}/reviews",
-        json={"rating": 4.5, "title": "Nice"},
+        json={"title": "Nice"},
     )
     assert anonymous_create.status_code in {401, 403}
 
     create_response = await client.post(
         f"/api/v1/plugins/{plugin['id']}/reviews",
         headers={"Authorization": f"Bearer {reviewer_token}"},
-        json={"rating": 4.5, "title": "Nice", "content": "Works well"},
+        json={"title": "Nice", "content": "Works well"},
     )
     assert create_response.status_code == 201
     review = create_response.json()
@@ -97,17 +96,17 @@ async def test_reviews_require_login_and_owner_for_mutations(
     other_update = await client.put(
         f"/api/v1/reviews/{review['id']}",
         headers={"Authorization": f"Bearer {other_token}"},
-        json={"rating": 2, "title": "Changed"},
+        json={"title": "Changed"},
     )
     assert other_update.status_code == 403
 
     owner_update = await client.put(
         f"/api/v1/reviews/{review['id']}",
         headers={"Authorization": f"Bearer {reviewer_token}"},
-        json={"rating": 5, "title": "Still nice"},
+        json={"title": "Still nice"},
     )
     assert owner_update.status_code == 200
-    assert owner_update.json()["rating"] == 5
+    assert owner_update.json()["title"] == "Still nice"
 
     other_delete = await client.delete(
         f"/api/v1/reviews/{review['id']}",
@@ -145,7 +144,7 @@ async def test_review_create_rolls_back_when_notification_fails(
         await client.post(
             f"/api/v1/plugins/{plugin['id']}/reviews",
             headers={"Authorization": f"Bearer {reviewer_token}"},
-            json={"rating": 4, "title": "Should rollback"},
+            json={"title": "Should rollback"},
         )
 
     assert await db_session.scalar(
@@ -157,7 +156,7 @@ async def test_review_create_rolls_back_when_notification_fails(
     assert db_plugin.rating_average == 0
 
 
-async def test_review_update_rolls_back_when_rating_refresh_fails(
+async def test_review_update_keeps_comment_text_without_rating(
     client: AsyncClient,
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
@@ -174,27 +173,74 @@ async def test_review_update_rolls_back_when_rating_refresh_fails(
     create_response = await client.post(
         f"/api/v1/plugins/{plugin['id']}/reviews",
         headers={"Authorization": f"Bearer {reviewer_token}"},
-        json={"rating": 3, "title": "Original"},
+        json={"title": "Original"},
     )
     assert create_response.status_code == 201
     review = create_response.json()
 
-    async def fail_update_rating(*args, **kwargs):
-        raise RuntimeError("rating boom")
-
-    monkeypatch.setattr(PluginService, "update_rating", fail_update_rating)
-
-    with pytest.raises(RuntimeError, match="rating boom"):
-        await client.put(
-            f"/api/v1/reviews/{review['id']}",
-            headers={"Authorization": f"Bearer {reviewer_token}"},
-            json={"rating": 5, "title": "Should rollback"},
-        )
+    update_response = await client.put(
+        f"/api/v1/reviews/{review['id']}",
+        headers={"Authorization": f"Bearer {reviewer_token}"},
+        json={"title": "Updated"},
+    )
+    assert update_response.status_code == 200
 
     db_review = await db_session.get(Review, review["id"])
     assert db_review is not None
-    assert db_review.rating == 3
-    assert db_review.title == "Original"
+    assert db_review.rating is None
+    assert db_review.title == "Updated"
+
+
+async def test_plugin_like_toggle_updates_user_state_and_count(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    await create_test_user(db_session, "like_owner", "like-owner@example.com")
+    await create_test_user(db_session, "liker", "liker@example.com")
+    await create_test_user(db_session, "like_admin", "like-admin@example.com", is_admin=True)
+
+    owner_token = await login(client, "like_owner")
+    liker_token = await login(client, "liker")
+    admin_token = await login(client, "like_admin")
+    plugin = await create_plugin(client, owner_token, admin_token, "like-target")
+
+    anonymous_like = await client.put(f"/api/v1/plugins/{plugin['id']}/like?liked=true")
+    assert anonymous_like.status_code in {401, 403}
+
+    like_response = await client.put(
+        f"/api/v1/plugins/{plugin['id']}/like?liked=true",
+        headers={"Authorization": f"Bearer {liker_token}"},
+    )
+    assert like_response.status_code == 200
+    assert like_response.json()["liked"] is True
+    assert like_response.json()["likes"] == 1
+
+    plugin_response = await client.get(
+        f"/api/v1/plugins/{plugin['id']}",
+        headers={"Authorization": f"Bearer {liker_token}"},
+    )
+    assert plugin_response.status_code == 200
+    assert plugin_response.json()["likes"] == 1
+    assert plugin_response.json()["liked_by_current_user"] is True
+
+    duplicate_like = await client.put(
+        f"/api/v1/plugins/{plugin['id']}/like?liked=true",
+        headers={"Authorization": f"Bearer {liker_token}"},
+    )
+    assert duplicate_like.status_code == 200
+    assert duplicate_like.json()["likes"] == 1
+
+    unlike_response = await client.put(
+        f"/api/v1/plugins/{plugin['id']}/like?liked=false",
+        headers={"Authorization": f"Bearer {liker_token}"},
+    )
+    assert unlike_response.status_code == 200
+    assert unlike_response.json()["liked"] is False
+    assert unlike_response.json()["likes"] == 0
+
+    assert await db_session.scalar(
+        select(PluginLike.id).where(PluginLike.plugin_id == plugin["id"])
+    ) is None
 
 
 async def test_versions_require_plugin_owner_or_admin(

@@ -12,13 +12,13 @@ import {
   Bot,
   MessageSquare,
   Plug,
+  Heart,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-// RatingBadge component removed - ratings now displayed inline
 import { formatDate, formatNumber, getZoneById } from '@/lib/utils';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -49,12 +49,12 @@ export function PluginDetail() {
   const autoOpenPublish = searchParams.get('action') === 'publish';
   const [reviewContent, setReviewContent] = useState('');
   const [reviewTitle, setReviewTitle] = useState('');
-  const [reviewRating, setReviewRating] = useState(5);
   const [plugin, setPlugin] = useState<Plugin | null>(null);
   const [pluginAuthorId, setPluginAuthorId] = useState<number | null>(null);
   const [pluginReviews, setPluginReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [isTogglingLike, setIsTogglingLike] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [reviewError, setReviewError] = useState('');
@@ -70,6 +70,8 @@ export function PluginDetail() {
       && /^[0-9a-fA-F]{64}$/.test(installablePackageSha256)
       && installablePackageSha256 !== '0'.repeat(64),
   );
+  const aiRating = plugin?.aiRating ?? null;
+  const adminRating = plugin?.adminRating ?? null;
 
   const currentUser = useMemo<ApiUser | null>(() => {
     try {
@@ -238,14 +240,12 @@ export function PluginDetail() {
     setIsSubmittingReview(true);
     try {
       const review = await reviewsApi.create(plugin.id, {
-        rating: reviewRating,
         title: reviewTitle.trim() || undefined,
         content: reviewContent.trim() || undefined
       });
       setPluginReviews((items) => [review, ...items]);
       setReviewTitle('');
       setReviewContent('');
-      setReviewRating(5);
       notifySuccess('评论已提交', {
         context: {
           module: 'pluginDetail',
@@ -262,11 +262,46 @@ export function PluginDetail() {
           module: 'pluginDetail',
           action: 'createReview',
           pluginId: plugin.id,
-          rating: reviewRating
         }
       });
     } finally {
       setIsSubmittingReview(false);
+    }
+  };
+
+  const toggleLike = async () => {
+    if (!plugin || isTogglingLike) {
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate(`/login?next=${encodeURIComponent(`/plugin/${plugin.id}`)}`);
+      return;
+    }
+
+    const nextLiked = !plugin.likedByCurrentUser;
+    setIsTogglingLike(true);
+    try {
+      const result = await pluginsApi.setLike(plugin.id, nextLiked);
+      setPlugin({
+        ...plugin,
+        likes: result.likes,
+        likedByCurrentUser: result.liked
+      });
+    } catch (error) {
+      reportError(error, {
+        title: nextLiked ? '点赞失败' : '取消点赞失败',
+        userMessage: '操作失败，请稍后重试。',
+        context: {
+          module: 'pluginDetail',
+          action: 'toggleLike',
+          pluginId: plugin.id,
+          liked: nextLiked
+        }
+      });
+    } finally {
+      setIsTogglingLike(false);
     }
   };
 
@@ -419,6 +454,20 @@ export function PluginDetail() {
                   </div>
                 </div>
               </div>
+
+              <Button
+                variant="outline"
+                className={`w-full border-slate-700 py-6 ${
+                  plugin.likedByCurrentUser
+                    ? 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+                onClick={toggleLike}
+                disabled={isTogglingLike}
+              >
+                <Heart className={`w-5 h-5 mr-2 ${plugin.likedByCurrentUser ? 'fill-current' : ''}`} />
+                {plugin.likedByCurrentUser ? '已点赞' : '点赞'}
+              </Button>
 
               <Button
                 className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-95 text-primary-foreground py-6"
@@ -592,47 +641,37 @@ export function PluginDetail() {
                     </p>
                   </div>
                 </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-[#0F0F1A] rounded-lg">
-                    <span className="text-slate-400">功能性</span>
-                    <span
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold"
-                      style={{
-                        backgroundColor: `${ratingColors[plugin.aiRating.functionality]}20`,
-                        color: ratingColors[plugin.aiRating.functionality],
-                      }}
-                    >
-                      {plugin.aiRating.functionality}
-                    </span>
+                {aiRating ? (
+                  <>
+                    <div className="space-y-3">
+                      {[
+                        ['功能性', aiRating.functionality],
+                        ['安全性', aiRating.security],
+                        ['文档完善度', aiRating.documentation],
+                      ].map(([label, grade]) => (
+                        <div key={label} className="flex items-center justify-between p-3 bg-[#0F0F1A] rounded-lg">
+                          <span className="text-slate-400">{label}</span>
+                          <span
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold"
+                            style={{
+                              backgroundColor: `${ratingColors[grade]}20`,
+                              color: ratingColors[grade],
+                            }}
+                          >
+                            {grade}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-sm text-slate-500 mt-4">
+                      评级时间: {aiRating.ratedAt ? formatDate(aiRating.ratedAt) : '未知'}
+                    </p>
+                  </>
+                ) : (
+                  <div className="rounded-lg bg-[#0F0F1A] p-4 text-sm text-slate-500">
+                    暂无 AI 评级
                   </div>
-                  <div className="flex items-center justify-between p-3 bg-[#0F0F1A] rounded-lg">
-                    <span className="text-slate-400">安全性</span>
-                    <span
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold"
-                      style={{
-                        backgroundColor: `${ratingColors[plugin.aiRating.security]}20`,
-                        color: ratingColors[plugin.aiRating.security],
-                      }}
-                    >
-                      {plugin.aiRating.security}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-[#0F0F1A] rounded-lg">
-                    <span className="text-slate-400">文档完善度</span>
-                    <span
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold"
-                      style={{
-                        backgroundColor: `${ratingColors[plugin.aiRating.documentation]}20`,
-                        color: ratingColors[plugin.aiRating.documentation],
-                      }}
-                    >
-                      {plugin.aiRating.documentation}
-                    </span>
-                  </div>
-                </div>
-                <p className="text-sm text-slate-500 mt-4">
-                  评级时间: {plugin.aiRating.ratedAt}
-                </p>
+                )}
               </div>
 
               {/* Admin Rating */}
@@ -650,47 +689,37 @@ export function PluginDetail() {
                     </p>
                   </div>
                 </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-[#0F0F1A] rounded-lg">
-                    <span className="text-slate-400">功能性</span>
-                    <span
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold"
-                      style={{
-                        backgroundColor: `${ratingColors[plugin.adminRating.functionality]}20`,
-                        color: ratingColors[plugin.adminRating.functionality],
-                      }}
-                    >
-                      {plugin.adminRating.functionality}
-                    </span>
+                {adminRating ? (
+                  <>
+                    <div className="space-y-3">
+                      {[
+                        ['功能性', adminRating.functionality],
+                        ['安全性', adminRating.security],
+                        ['文档完善度', adminRating.documentation],
+                      ].map(([label, grade]) => (
+                        <div key={label} className="flex items-center justify-between p-3 bg-[#0F0F1A] rounded-lg">
+                          <span className="text-slate-400">{label}</span>
+                          <span
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold"
+                            style={{
+                              backgroundColor: `${ratingColors[grade]}20`,
+                              color: ratingColors[grade],
+                            }}
+                          >
+                            {grade}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-sm text-slate-500 mt-4">
+                      评级时间: {adminRating.ratedAt ? formatDate(adminRating.ratedAt) : '未知'}
+                    </p>
+                  </>
+                ) : (
+                  <div className="rounded-lg bg-[#0F0F1A] p-4 text-sm text-slate-500">
+                    暂无官方评级
                   </div>
-                  <div className="flex items-center justify-between p-3 bg-[#0F0F1A] rounded-lg">
-                    <span className="text-slate-400">安全性</span>
-                    <span
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold"
-                      style={{
-                        backgroundColor: `${ratingColors[plugin.adminRating.security]}20`,
-                        color: ratingColors[plugin.adminRating.security],
-                      }}
-                    >
-                      {plugin.adminRating.security}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-[#0F0F1A] rounded-lg">
-                    <span className="text-slate-400">文档完善度</span>
-                    <span
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold"
-                      style={{
-                        backgroundColor: `${ratingColors[plugin.adminRating.documentation]}20`,
-                        color: ratingColors[plugin.adminRating.documentation],
-                      }}
-                    >
-                      {plugin.adminRating.documentation}
-                    </span>
-                  </div>
-                </div>
-                <p className="text-sm text-slate-500 mt-4">
-                  评级时间: {plugin.adminRating.ratedAt}
-                </p>
+                )}
               </div>
             </div>
           </TabsContent>
@@ -703,27 +732,6 @@ export function PluginDetail() {
                   发表评论
                 </h3>
                 <div className="space-y-4">
-                  <div>
-                    <label className="text-sm text-slate-400 mb-2 block">
-                      评分
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {[5, 4, 3, 2, 1].map((rating) => (
-                        <button
-                          key={rating}
-                          type="button"
-                          onClick={() => setReviewRating(rating)}
-                          className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-                            reviewRating === rating
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white'
-                          }`}
-                        >
-                          {rating} 分
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                   <div>
                     <label className="text-sm text-slate-400 mb-2 block">
                       标题
@@ -794,12 +802,8 @@ export function PluginDetail() {
                     <p className="text-slate-300 mb-4">{review.content || '未填写评论内容'}</p>
                     <div className="flex items-center gap-4">
                       <span className="rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">
-                        {review.rating ?? 5} 分
+                        用户评论
                       </span>
-                      <button className="flex items-center gap-1.5 text-slate-500 hover:text-primary transition-colors">
-                        <ThumbsUp className="w-4 h-4" />
-                        <span className="text-sm">{review.likes}</span>
-                      </button>
                     </div>
                   </div>
                 ))

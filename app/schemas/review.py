@@ -1,25 +1,18 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from datetime import datetime
 
 
 class ReviewBase(BaseModel):
-    rating: float = Field(..., ge=1, le=5)
     title: Optional[str] = Field(None, max_length=100)
     content: Optional[str] = None
 
 
 class ReviewCreate(ReviewBase):
-    @field_validator('rating')
-    @classmethod
-    def validate_rating(cls, v):
-        if v < 1 or v > 5:
-            raise ValueError('评分必须在 1-5 之间')
-        return round(v * 2) / 2  # 四舍五入到 0.5
+    pass
 
 
 class ReviewUpdate(BaseModel):
-    rating: Optional[float] = Field(None, ge=1, le=5)
     title: Optional[str] = Field(None, max_length=100)
     content: Optional[str] = None
 

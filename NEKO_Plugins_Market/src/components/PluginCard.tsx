@@ -22,6 +22,7 @@ const ratingColors: Record<string, string> = {
 export function PluginCard({ plugin }: PluginCardProps) {
   const navigate = useNavigate();
   const zone = getZoneById(plugin.zone);
+  const summaryRating = plugin.adminRating ?? plugin.aiRating ?? null;
 
   const formatDownloads = (num: number): string => {
     if (num >= 10000) {
@@ -117,44 +118,32 @@ export function PluginCard({ plugin }: PluginCardProps) {
         </p>
 
         {/* Rating Summary */}
-        <div className="flex items-center gap-2 mb-4 p-2 bg-[#0F0F1A] rounded-lg">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">功能</span>
-            <span
-              className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
-              style={{
-                backgroundColor: `${ratingColors[plugin.aiRating.functionality]}20`,
-                color: ratingColors[plugin.aiRating.functionality],
-              }}
-            >
-              {plugin.aiRating.functionality}
-            </span>
+        {summaryRating ? (
+          <div className="flex items-center gap-2 mb-4 p-2 bg-[#0F0F1A] rounded-lg">
+            {[
+              ['功能', summaryRating.functionality],
+              ['安全', summaryRating.security],
+              ['文档', summaryRating.documentation],
+            ].map(([label, grade]) => (
+              <div key={label} className="flex items-center gap-1.5">
+                <span className="text-xs text-slate-500">{label}</span>
+                <span
+                  className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
+                  style={{
+                    backgroundColor: `${ratingColors[grade]}20`,
+                    color: ratingColors[grade],
+                  }}
+                >
+                  {grade}
+                </span>
+              </div>
+            ))}
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">安全</span>
-            <span
-              className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
-              style={{
-                backgroundColor: `${ratingColors[plugin.aiRating.security]}20`,
-                color: ratingColors[plugin.aiRating.security],
-              }}
-            >
-              {plugin.aiRating.security}
-            </span>
+        ) : (
+          <div className="mb-4 rounded-lg bg-[#0F0F1A] p-2 text-xs text-slate-500">
+            待评级
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">文档</span>
-            <span
-              className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
-              style={{
-                backgroundColor: `${ratingColors[plugin.aiRating.documentation]}20`,
-                color: ratingColors[plugin.aiRating.documentation],
-              }}
-            >
-              {plugin.aiRating.documentation}
-            </span>
-          </div>
-        </div>
+        )}
 
         {/* Footer */}
         <div className="flex items-center justify-between pt-3 border-t border-slate-800/50">

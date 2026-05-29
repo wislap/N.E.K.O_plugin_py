@@ -45,5 +45,12 @@ export const pluginsApi = {
 
   recordDownload(pluginId: string) {
     return post<{ message: string; success: boolean }>(`/plugins/${pluginId}/download`);
+  },
+
+  setLike(pluginId: string, liked: boolean) {
+    return request<{ plugin_id: number; liked: boolean; likes: number }>(
+      `/plugins/${pluginId}/like?liked=${liked ? "true" : "false"}`,
+      { method: "PUT" }
+    );
   }
 };

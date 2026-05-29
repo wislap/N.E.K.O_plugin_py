@@ -5,7 +5,6 @@ from typing import Optional, List
 
 from app.models.review import Review
 from app.models.plugin import Plugin
-from app.services.plugin_service import PluginService
 from app.services.notification_service import NotificationService
 from app.services.transactions import commit_or_rollback
 
@@ -82,7 +81,6 @@ class ReviewService:
         db: AsyncSession,
         plugin_id: int,
         author_id: int,
-        rating: float,
         title: Optional[str] = None,
         content: Optional[str] = None
     ) -> Review:
@@ -92,13 +90,12 @@ class ReviewService:
             db, plugin_id, author_id
         )
         if existing:
-            raise ValueError("您已经对该插件进行过评分")
+            raise ValueError("您已经评论过该插件")
         
         async with commit_or_rollback(db):
             review = Review(
                 plugin_id=plugin_id,
                 author_id=author_id,
-                rating=rating,
                 title=title,
                 content=content
             )
@@ -111,10 +108,9 @@ class ReviewService:
                     user_id=plugin.author_id,
                     type="plugin_reviewed",
                     title="插件收到新评论",
-                    content=f"你的插件「{plugin.name}」收到了一条 {rating:g} 分评论。",
+                    content=f"你的插件「{plugin.name}」收到了一条新评论。",
                     target_url=f"/plugin/{plugin.id}",
                 )
-            await PluginService.update_rating(db, plugin_id, commit=False)
 
         await db.refresh(review)
 
@@ -125,20 +121,15 @@ class ReviewService:
     async def update_review(
         db: AsyncSession,
         review: Review,
-        rating: Optional[float] = None,
         title: Optional[str] = None,
         content: Optional[str] = None
     ) -> Review:
         """更新评论"""
         async with commit_or_rollback(db):
-            if rating is not None:
-                review.rating = rating
             if title is not None:
                 review.title = title
             if content is not None:
                 review.content = content
-
-            await PluginService.update_rating(db, review.plugin_id, commit=False)
 
         await db.refresh(review)
 
@@ -148,22 +139,5 @@ class ReviewService:
     @staticmethod
     async def delete_review(db: AsyncSession, review: Review) -> None:
         """删除评论"""
-        plugin_id = review.plugin_id
         async with commit_or_rollback(db):
             await db.delete(review)
-            await PluginService.update_rating(db, plugin_id, commit=False)
-    
-    @staticmethod
-    async def get_rating_distribution(db: AsyncSession, plugin_id: int) -> dict:
-        """获取评分分布"""
-        result = await db.execute(
-            select(Review.rating, func.count(Review.id))
-            .where(Review.plugin_id == plugin_id)
-            .group_by(Review.rating)
-        )
-        
-        distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
-        for rating, count in result.all():
-            distribution[int(rating)] = count
-        
-        return distribution

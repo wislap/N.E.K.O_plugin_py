@@ -24,8 +24,9 @@ export interface Plugin {
   tags: string[];
   downloads: number;
   likes: number;
-  aiRating: Rating;
-  adminRating: Rating;
+  likedByCurrentUser?: boolean;
+  aiRating?: Rating | null;
+  adminRating?: Rating | null;
   readme: string;
   createdAt: string;
   updatedAt: string;
@@ -39,10 +40,8 @@ export interface Review {
     name: string;
     avatar: string;
   };
-  rating?: number;
   title?: string;
   content: string;
-  likes: number;
   createdAt: string;
 }
 

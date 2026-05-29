@@ -181,6 +181,20 @@ async def get_current_user(
     return user
 
 
+async def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    """Return the logged-in user when a valid bearer token is present."""
+    if credentials is None:
+        return None
+
+    try:
+        return await get_current_user(credentials=credentials, db=db)
+    except HTTPException:
+        return None
+
+
 def require_verified_user(current_user: User = Depends(get_current_user)) -> User:
     """Require a verified email address for creator/publishing actions."""
     if current_user.is_admin or current_user.email_verified_at is not None:

@@ -1,21 +1,25 @@
 import type { Plugin as MarketPlugin, Rating, Review as MarketReview } from "@/types";
 import type { Plugin, ReviewDto } from "./types";
 
-function fallbackRating(): Rating {
-  return {
-    functionality: "B",
-    security: "B",
-    documentation: "B",
-    ratedAt: new Date(0).toISOString()
-  };
-}
-
 function zoneSlugFromId(zoneId?: number | null): MarketPlugin["zone"] {
   const zones: MarketPlugin["zone"][] = ["game", "companion", "function", "entertainment", "tool"];
   if (!zoneId || zoneId < 1 || zoneId > zones.length) {
     return "function";
   }
   return zones[zoneId - 1];
+}
+
+function toMarketRating(rating?: Plugin["ai_rating"]): Rating | null {
+  if (!rating) {
+    return null;
+  }
+
+  return {
+    functionality: rating.functionality,
+    security: rating.security,
+    documentation: rating.documentation,
+    ratedAt: rating.ratedAt ?? ""
+  };
 }
 
 function githubOwner(repoUrl?: string | null) {
@@ -38,7 +42,6 @@ function githubProfile(repoUrl?: string | null) {
 
 export function toMarketPlugin(plugin: Plugin): MarketPlugin {
   const description = plugin.description ?? plugin.short_description ?? "";
-  const rating = fallbackRating();
   const latest = plugin.latest_version;
 
   return {
@@ -61,8 +64,9 @@ export function toMarketPlugin(plugin: Plugin): MarketPlugin {
     tags: plugin.tags ?? [],
     downloads: plugin.download_count,
     likes: plugin.likes ?? 0,
-    aiRating: rating,
-    adminRating: rating,
+    likedByCurrentUser: plugin.liked_by_current_user ?? false,
+    aiRating: toMarketRating(plugin.ai_rating),
+    adminRating: toMarketRating(plugin.admin_rating),
     readme: plugin.readme ?? description,
     createdAt: plugin.created_at,
     updatedAt: plugin.updated_at,
@@ -80,10 +84,8 @@ export function toMarketReview(review: ReviewDto): MarketReview {
       name: userName,
       avatar: review.author?.avatar_url ?? ""
     },
-    rating: review.rating,
     title: review.title ?? undefined,
     content: review.content ?? "",
-    likes: 0,
     createdAt: review.created_at
   };
 }

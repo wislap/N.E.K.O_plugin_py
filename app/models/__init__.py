@@ -14,6 +14,7 @@ from app.models.system_setting import SystemSetting, SMTPSettingKeys
 from app.models.notification import Notification
 from app.models.email_verification import EmailVerificationToken
 from app.models.user_plugin_install import UserPluginInstall
+from app.models.plugin_like import PluginLike
 from app.models.auth_session import LoginAttempt, RefreshTokenSession
 from app.models.plugin_submission import (
     PluginReviewCase,
@@ -46,6 +47,7 @@ __all__ = [
     "Notification",
     "EmailVerificationToken",
     "UserPluginInstall",
+    "PluginLike",
     "LoginAttempt", "RefreshTokenSession",
     "PluginSubmission", "PluginSubmissionSnapshot",
     "PluginReviewCase", "PluginReviewComment", "PluginReviewEvent",
