@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field, EmailStr
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime
 
 
@@ -34,6 +34,17 @@ class PasswordChange(BaseModel):
     new_password: str = Field(..., min_length=6, max_length=100)
 
 
+class UserRoleSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    name: str
+    description: Optional[str] = None
+    level: int = 0
+    is_system: bool = False
+
+
 class User(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
@@ -50,6 +61,11 @@ class User(UserBase):
     updated_at: datetime
     last_login: Optional[datetime]
     plugin_count: Optional[int] = 0
+
+
+class AdminUser(User):
+    level: int = 0
+    roles: List[UserRoleSummary] = Field(default_factory=list)
 
 
 class Token(BaseModel):

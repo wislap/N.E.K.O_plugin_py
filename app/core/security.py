@@ -162,10 +162,13 @@ async def get_current_user(
         select(User)
         .options(
             selectinload(User.permission_groups).selectinload(PermissionGroup.permissions),
-            selectinload(User.permission_groups).selectinload(PermissionGroup.inherited_groups),
+            selectinload(User.permission_groups).selectinload(
+                PermissionGroup.inherited_groups
+            ).selectinload(PermissionGroup.permissions),
             selectinload(User.permission_groups).selectinload(PermissionGroup.parent),
         )
         .where(User.id == int(user_id))
+        .execution_options(populate_existing=True)
     )
     user = result.scalar_one_or_none()
     
@@ -211,10 +214,13 @@ async def get_or_create_debug_user(db: AsyncSession) -> User:
         select(User)
         .options(
             selectinload(User.permission_groups).selectinload(PermissionGroup.permissions),
-            selectinload(User.permission_groups).selectinload(PermissionGroup.inherited_groups),
+            selectinload(User.permission_groups).selectinload(
+                PermissionGroup.inherited_groups
+            ).selectinload(PermissionGroup.permissions),
             selectinload(User.permission_groups).selectinload(PermissionGroup.parent),
         )
         .where(User.username == settings.DEBUG_AUTH_USERNAME)
+        .execution_options(populate_existing=True)
     )
     user = result.scalar_one_or_none()
 

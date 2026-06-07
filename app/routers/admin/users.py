@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import PermissionChecker
 from app.models.auth_session import RefreshTokenSession
 from app.models.email_verification import EmailVerificationToken
 from app.models.notification import Notification
-from app.models.permission import PermissionAuditLog, user_permission_groups
+from app.models.permission import PermissionAuditLog, PermissionGroup, user_permission_groups
 from app.models.plugin import Plugin
 from app.models.plugin_rating import PluginRating
 from app.models.plugin_submission import (
@@ -20,10 +21,25 @@ from app.models.review import Review
 from app.models.user import User as UserModel
 from app.models.user_plugin_install import UserPluginInstall
 from app.schemas.common import MessageResponse, PaginatedResponse
-from app.schemas.user import User, UserUpdate
+from app.schemas.user import AdminUser, UserUpdate
+from app.services.permission_service import PermissionService
 
 router = APIRouter(prefix="/users", tags=["admin-users"])
 require_user_management = PermissionChecker("system:user")
+
+
+def _load_user_query():
+    return (
+        select(UserModel)
+        .options(
+            selectinload(UserModel.permission_groups).selectinload(PermissionGroup.permissions),
+            selectinload(UserModel.permission_groups).selectinload(
+                PermissionGroup.inherited_groups
+            ).selectinload(PermissionGroup.permissions),
+            selectinload(UserModel.permission_groups).selectinload(PermissionGroup.parent),
+        )
+        .execution_options(populate_existing=True)
+    )
 
 
 async def _count_user_business_refs(db: AsyncSession, user_id: int) -> dict[str, int]:
@@ -49,7 +65,7 @@ async def _count_user_business_refs(db: AsyncSession, user_id: int) -> dict[str,
     return refs
 
 
-@router.get("", response_model=PaginatedResponse[User])
+@router.get("", response_model=PaginatedResponse[AdminUser])
 async def list_users(
     q: str | None = Query(None),
     page: int = Query(1, ge=1),
@@ -68,7 +84,7 @@ async def list_users(
             )
         )
 
-    query = select(UserModel)
+    query = _load_user_query()
     count_query = select(func.count(UserModel.id))
     if filters:
         query = query.where(*filters)
@@ -92,19 +108,45 @@ async def list_users(
     )
 
 
-@router.put("/{user_id}", response_model=User)
+@router.put("/{user_id}", response_model=AdminUser)
 async def update_user(
     user_id: int,
     update_data: UserUpdate,
     current_user: UserModel = Depends(require_user_management),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(UserModel).where(UserModel.id == user_id))
+    service = PermissionService()
+    result = await db.execute(_load_user_query().where(UserModel.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
 
     update_dict = update_data.model_dump(exclude_unset=True)
+
+    is_self = user.id == current_user.id
+    if is_self and update_dict.get("is_admin") is False:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能降级当前登录用户",
+        )
+    if is_self and update_dict.get("is_active") is False:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能禁用当前登录用户",
+        )
+
+    if "is_admin" in update_dict and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="只有超级管理员可以调整超级管理员身份",
+        )
+
+    if not is_self:
+        try:
+            service.assert_can_manage_user(current_user, user)
+        except PermissionError as e:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
     if "username" in update_dict and update_dict["username"] != user.username:
         existing = await db.execute(
             select(UserModel).where(UserModel.username == update_dict["username"])
@@ -142,7 +184,8 @@ async def update_user(
         setattr(user, field, value)
 
     await db.commit()
-    await db.refresh(user)
+    result = await db.execute(_load_user_query().where(UserModel.id == user.id))
+    user = result.scalar_one()
     return user
 
 
@@ -152,12 +195,18 @@ async def delete_user(
     current_user: UserModel = Depends(require_user_management),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(UserModel).where(UserModel.id == user_id))
+    service = PermissionService()
+    result = await db.execute(_load_user_query().where(UserModel.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
     if user.id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能删除当前登录用户")
+    try:
+        service.assert_can_manage_user(current_user, user)
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
     if user.is_admin and user.is_active:
         admin_count = (
             await db.execute(

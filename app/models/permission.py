@@ -2,11 +2,14 @@
 权限系统模型
 支持权限组、权限组合、权限继承、树权限
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Table, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Table, Text, and_
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 from app.core.time import utc_now
+
+
+RETIRED_PERMISSION_CODES = {"system:permission"}
 
 
 # 权限组与子权限关联表
@@ -69,6 +72,7 @@ class Permission(Base):
 class PermissionGroup(Base):
     """权限组模型 - 包含多个子权限，支持树形结构和继承"""
     __tablename__ = 'permission_groups'
+    RETIRED_PERMISSION_CODES = RETIRED_PERMISSION_CODES
     
     id = Column(Integer, primary_key=True, index=True)
     
@@ -82,6 +86,7 @@ class PermissionGroup(Base):
     
     # 权限组类型
     group_type = Column(String(50), default='custom')  # system/custom/role
+    level = Column(Integer, default=10, nullable=False)  # 管理等级，越高越能管理更低等级用户/角色
     
     # 状态
     is_active = Column(Boolean, default=True)
@@ -95,6 +100,11 @@ class PermissionGroup(Base):
     permissions = relationship(
         'Permission',
         secondary=permission_group_items,
+        secondaryjoin=lambda: and_(
+            permission_group_items.c.permission_id == Permission.id,
+            Permission.is_active == True,
+            Permission.code.notin_(RETIRED_PERMISSION_CODES),
+        ),
         back_populates='groups'
     )
     
@@ -137,7 +147,10 @@ class PermissionGroup(Base):
         
         visited.add(self.id)
         
-        all_permissions = set(self.permissions)
+        all_permissions = {
+            permission for permission in self.permissions
+            if permission.is_active and permission.code not in self.RETIRED_PERMISSION_CODES
+        }
         
         # 添加直接继承的权限组的权限
         for inherited_group in self.inherited_groups:

@@ -1,12 +1,11 @@
 """
 权限管理路由
-提供权限和权限组的 CRUD 接口
+提供权限和角色的 CRUD 接口
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-from typing import List, Optional
+from typing import List, Optional, Type
 
 from app.core.database import get_db
 from app.core.security import PermissionChecker, get_current_user
@@ -19,7 +18,38 @@ from app.schemas.permission import (
 )
 
 router = APIRouter(prefix="/permissions", tags=["permissions"])
-require_permission_management = PermissionChecker("system:permission")
+require_role_management = PermissionChecker("system:role")
+
+
+def _map_service_error(error: Exception) -> HTTPException:
+    if isinstance(error, PermissionError):
+        return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error))
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error))
+
+
+def _parse_request_model(model: Type, data: dict):
+    try:
+        return model.model_validate(data)
+    except ValidationError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error.errors(include_url=False, include_context=False),
+        )
+
+
+def _user_permissions_payload(user: User) -> dict:
+    permissions = user.get_all_permissions()
+    roles = user.role_summaries
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "is_admin": user.is_admin,
+        "is_super_admin": user.is_admin,
+        "level": user.effective_level,
+        "permissions": list(permissions),
+        "groups": [role.code for role in roles],
+        "roles": roles,
+    }
 
 
 # ========== 权限管理 ==========
@@ -28,7 +58,7 @@ require_permission_management = PermissionChecker("system:permission")
 async def list_permissions(
     category: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission_management)
+    current_user: User = Depends(require_role_management)
 ):
     """获取权限列表"""
     service = PermissionService()
@@ -42,7 +72,7 @@ async def list_permissions(
 async def create_permission(
     data: PermissionCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission_management)
+    current_user: User = Depends(get_current_user)
 ):
     """创建新权限（需要权限管理权限）"""
     service = PermissionService()
@@ -52,82 +82,87 @@ async def create_permission(
             code=data.code,
             name=data.name,
             category=data.category,
-            description=data.description
+            description=data.description,
+            operator=current_user,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except (PermissionError, ValueError) as e:
+        raise _map_service_error(e)
 
 
-# ========== 权限组管理 ==========
+# ========== 角色管理 ==========
 
 @router.get("/groups", response_model=List[PermissionGroupResponse])
 async def list_permission_groups(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission_management)
+    current_user: User = Depends(require_role_management)
 ):
-    """获取权限组列表"""
-    from app.models.permission import PermissionGroup
-    result = await db.execute(
-        select(PermissionGroup).options(selectinload(PermissionGroup.permissions))
-    )
-    return list(result.scalars().all())
+    """获取角色列表"""
+    service = PermissionService()
+    return await service.get_all_permission_groups(db)
 
 
 @router.post("/groups/create", response_model=PermissionGroupResponse)
 async def create_permission_group(
-    data: PermissionGroupCreate,
+    data: dict = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission_management)
+    current_user: User = Depends(require_role_management)
 ):
-    """创建权限组"""
+    """创建角色"""
     service = PermissionService()
+    payload = _parse_request_model(PermissionGroupCreate, data)
     try:
         return await service.create_permission_group(
             db,
-            code=data.code,
-            name=data.name,
-            description=data.description,
-            parent_id=data.parent_id,
-            permission_codes=data.permission_codes
+            code=payload.code,
+            name=payload.name,
+            description=payload.description,
+            parent_id=payload.parent_id,
+            permission_codes=payload.permission_codes,
+            level=payload.level,
+            operator=current_user,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except (PermissionError, ValueError) as e:
+        raise _map_service_error(e)
 
 
 @router.put("/groups/{group_id}", response_model=PermissionGroupResponse)
 async def update_permission_group(
     group_id: int,
-    data: PermissionGroupUpdate,
+    data: dict = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission_management)
+    current_user: User = Depends(require_role_management)
 ):
-    """更新权限组"""
+    """更新角色"""
     service = PermissionService()
+    payload = _parse_request_model(PermissionGroupUpdate, data)
     try:
         return await service.update_permission_group(
             db,
             group_id=group_id,
-            name=data.name,
-            description=data.description,
-            is_active=data.is_active
+            name=payload.name,
+            description=payload.description,
+            is_active=payload.is_active,
+            level=payload.level,
+            permission_codes=payload.permission_codes,
+            operator=current_user,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except (PermissionError, ValueError) as e:
+        raise _map_service_error(e)
 
 
 @router.delete("/groups/{group_id}")
 async def delete_permission_group(
     group_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission_management)
+    current_user: User = Depends(require_role_management)
 ):
-    """删除权限组"""
+    """删除角色"""
     service = PermissionService()
     try:
-        await service.delete_permission_group(db, group_id)
-        return {"message": "权限组已删除"}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        await service.delete_permission_group(db, group_id, operator=current_user)
+        return {"message": "角色已删除"}
+    except (PermissionError, ValueError) as e:
+        raise _map_service_error(e)
 
 
 @router.post("/groups/{group_id}/permissions")
@@ -135,15 +170,20 @@ async def add_permissions_to_group(
     group_id: int,
     permission_codes: List[str],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission_management)
+    current_user: User = Depends(require_role_management)
 ):
-    """向权限组添加权限"""
+    """向角色添加权限"""
     service = PermissionService()
     try:
-        group = await service.add_permissions_to_group(db, group_id, permission_codes)
-        return {"message": "权限已添加", "group": group.code}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        group = await service.add_permissions_to_group(
+            db,
+            group_id,
+            permission_codes,
+            operator=current_user,
+        )
+        return {"message": "权限已添加", "role": group.code, "group": group.code}
+    except (PermissionError, ValueError) as e:
+        raise _map_service_error(e)
 
 
 @router.delete("/groups/{group_id}/permissions")
@@ -151,15 +191,20 @@ async def remove_permissions_from_group(
     group_id: int,
     permission_codes: List[str],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission_management)
+    current_user: User = Depends(require_role_management)
 ):
-    """从权限组移除权限"""
+    """从角色移除权限"""
     service = PermissionService()
     try:
-        group = await service.remove_permissions_from_group(db, group_id, permission_codes)
-        return {"message": "权限已移除", "group": group.code}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        group = await service.remove_permissions_from_group(
+            db,
+            group_id,
+            permission_codes,
+            operator=current_user,
+        )
+        return {"message": "权限已移除", "role": group.code, "group": group.code}
+    except (PermissionError, ValueError) as e:
+        raise _map_service_error(e)
 
 
 @router.post("/groups/{group_id}/inherit")
@@ -167,19 +212,25 @@ async def set_group_inheritance(
     group_id: int,
     inherit_from_ids: List[int],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission_management)
+    current_user: User = Depends(require_role_management)
 ):
-    """设置权限组继承关系"""
+    """设置角色继承关系"""
     service = PermissionService()
     try:
-        group = await service.set_group_inheritance(db, group_id, inherit_from_ids)
+        group = await service.set_group_inheritance(
+            db,
+            group_id,
+            inherit_from_ids,
+            operator=current_user,
+        )
         return {
             "message": "继承关系已设置",
+            "role": group.code,
             "group": group.code,
             "inherited_groups": [g.code for g in group.inherited_groups]
         }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except (PermissionError, ValueError) as e:
+        raise _map_service_error(e)
 
 
 # ========== 用户权限管理 ==========
@@ -189,19 +240,25 @@ async def assign_groups_to_user(
     user_id: int,
     data: PermissionAssignRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission_management)
+    current_user: User = Depends(require_role_management)
 ):
-    """为用户分配权限组"""
+    """为用户分配角色"""
     service = PermissionService()
     try:
-        user = await service.assign_groups_to_user(db, user_id, data.group_ids)
+        user = await service.assign_groups_to_user(
+            db,
+            user_id,
+            data.group_ids,
+            operator=current_user,
+        )
         return {
-            "message": "权限组已分配",
+            "message": "角色已分配",
             "user": user.username,
-            "groups": [g.code for g in user.permission_groups]
+            "groups": [g.code for g in user.permission_groups],
+            "roles": [g.code for g in user.permission_groups],
         }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except (PermissionError, ValueError) as e:
+        raise _map_service_error(e)
 
 
 @router.get("/users/me", response_model=UserPermissionsResponse)
@@ -210,36 +267,27 @@ async def get_my_permissions(
     current_user: User = Depends(get_current_user)
 ):
     """获取当前用户的权限"""
-    permissions = current_user.get_all_permissions()
-    return {
-        "user_id": current_user.id,
-        "username": current_user.username,
-        "is_admin": current_user.is_admin,
-        "permissions": list(permissions),
-        "groups": [g.code for g in current_user.permission_groups if g.is_active]
-    }
+    return _user_permissions_payload(current_user)
 
 
 @router.get("/users/{user_id}", response_model=UserPermissionsResponse)
 async def get_user_permissions(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission_management)
+    current_user: User = Depends(require_role_management)
 ):
     """获取指定用户的权限（需要管理员权限）"""
-    from sqlalchemy import select
-    user = await db.get(User, user_id)
+    service = PermissionService()
+    user = await service._get_user_with_permissions(db, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
-    
-    permissions = user.get_all_permissions()
-    return {
-        "user_id": user.id,
-        "username": user.username,
-        "is_admin": user.is_admin,
-        "permissions": list(permissions),
-        "groups": [g.code for g in user.permission_groups if g.is_active]
-    }
+
+    try:
+        service.assert_can_manage_user(current_user, user)
+    except PermissionError as e:
+        raise _map_service_error(e)
+
+    return _user_permissions_payload(user)
 
 
 @router.get("/check/{permission_code}")

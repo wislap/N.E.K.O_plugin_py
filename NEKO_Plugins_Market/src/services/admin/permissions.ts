@@ -1,11 +1,10 @@
 import {
   del,
-  delWithBody,
   post,
   put,
   request
 } from "@/services/http/client";
-import type { Role } from "@/services/types";
+import type { Permission, Role } from "@/services/types";
 import { roleCodeFromName, toRole } from "@/services/utils";
 
 type PermissionGroupResponse = {
@@ -14,8 +13,17 @@ type PermissionGroupResponse = {
   name: string;
   description?: string | null;
   is_system?: boolean;
+  is_active?: boolean;
+  level?: number;
+  user_count?: number;
+  group_type?: string | null;
   permissions?: Array<{ code: string }>;
 };
+
+export function getPermissions(category?: string) {
+  const query = category ? `?category=${encodeURIComponent(category)}` : "";
+  return request<Permission[]>(`/admin/permissions/list${query}`);
+}
 
 export async function getRoles() {
   const groups = await request<PermissionGroupResponse[]>("/admin/permissions/groups");
@@ -27,37 +35,30 @@ export async function createRole(data: Omit<Role, "id" | "user_count">) {
     code: data.code || roleCodeFromName(data.name),
     name: data.name,
     description: data.description,
+    level: data.level,
     permission_codes: data.permissions
   });
   return toRole(group);
 }
 
 export async function updateRole(roleId: number, data: Partial<Role>) {
-  const currentRoles = await getRoles();
-  const currentRole = currentRoles.find((role) => role.id === roleId);
   const group = await put<PermissionGroupResponse>(`/admin/permissions/groups/${roleId}`, {
     name: data.name,
-    description: data.description
+    description: data.description,
+    level: data.level,
+    is_active: data.is_active,
+    permission_codes: data.permissions
   });
-
-  if (data.permissions && currentRole) {
-    const currentPermissions = new Set(currentRole.permissions);
-    const nextPermissions = new Set(data.permissions);
-    const toAdd = data.permissions.filter((code) => !currentPermissions.has(code));
-    const toRemove = currentRole.permissions.filter((code) => !nextPermissions.has(code));
-
-    if (toAdd.length > 0) {
-      await post(`/admin/permissions/groups/${roleId}/permissions`, toAdd);
-    }
-    if (toRemove.length > 0) {
-      await delWithBody(`/admin/permissions/groups/${roleId}/permissions`, toRemove);
-    }
-  }
-
-  const roles = await getRoles();
-  return roles.find((role) => role.id === roleId) ?? toRole(group);
+  return toRole(group);
 }
 
 export async function deleteRole(roleId: number) {
   return del<{ message: string }>(`/admin/permissions/groups/${roleId}`);
+}
+
+export function assignRolesToUser(userId: number, roleIds: number[]) {
+  return post<{ message: string; user: string; groups: string[]; roles: string[] }>(
+    `/admin/permissions/users/${userId}/assign`,
+    { group_ids: roleIds }
+  );
 }

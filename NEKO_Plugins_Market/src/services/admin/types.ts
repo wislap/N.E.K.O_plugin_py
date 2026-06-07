@@ -1,8 +1,12 @@
+import type { Role as AdminRole } from "@/services/types";
+
 export type {
   DashboardStats,
   LogStats,
+  Permission,
   Plugin,
   Role,
+  RoleSummary,
   SMTPSettings,
   SystemSetting,
   User
@@ -12,8 +16,11 @@ export interface UserPermissions {
   user_id: number;
   username: string;
   is_admin: boolean;
+  is_super_admin?: boolean;
+  level: number;
   permissions: string[];
   groups: string[];
+  roles: AdminRole[];
 }
 
 export interface Category {

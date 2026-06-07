@@ -37,6 +37,10 @@ export function toRole(group: {
   name: string;
   description?: string | null;
   is_system?: boolean;
+  is_active?: boolean;
+  level?: number;
+  user_count?: number;
+  group_type?: string | null;
   permissions?: Array<{ code: string }>;
 }): Role {
   return {
@@ -45,7 +49,10 @@ export function toRole(group: {
     name: group.name,
     description: group.description ?? "",
     permissions: group.permissions?.map((permission) => permission.code) ?? [],
-    user_count: 0,
-    is_system: group.is_system ?? false
+    user_count: group.user_count ?? 0,
+    is_system: group.is_system ?? false,
+    is_active: group.is_active ?? true,
+    level: group.level ?? 10,
+    group_type: group.group_type ?? null
   };
 }

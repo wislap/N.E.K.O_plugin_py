@@ -119,7 +119,8 @@ async def test_user_admin_safety_guards(
         headers={"Authorization": f"Bearer {admin_token}"},
         json={"is_admin": False},
     )
-    assert demote_original_admin.status_code == 200
+    assert demote_original_admin.status_code == 400
+    assert "当前登录用户" in demote_original_admin.json()["detail"]
 
 
 async def test_user_management_permission_allows_non_admin_operator(
@@ -170,6 +171,62 @@ async def test_user_management_permission_allows_non_admin_operator(
     assert update_response.status_code == 200
     assert update_response.json()["is_active"] is False
     assert update_response.json()["username"] == "managed_member_disabled"
+
+
+async def test_user_management_level_blocks_equal_higher_and_super_admin_targets(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    operator = await create_test_user(
+        db_session,
+        username="level_operator",
+        email="level-operator@example.com",
+        is_admin=False,
+    )
+    equal_target = await create_test_user(
+        db_session,
+        username="equal_target",
+        email="equal-target@example.com",
+        is_admin=False,
+    )
+    higher_target = await create_test_user(
+        db_session,
+        username="higher_target",
+        email="higher-target@example.com",
+        is_admin=False,
+    )
+    super_target = await create_test_user(
+        db_session,
+        username="super_target",
+        email="super-target@example.com",
+        is_admin=True,
+    )
+    await grant_permission(db_session, operator, "system:user", level=100)
+    await grant_permission(db_session, equal_target, "plugin:review", level=100)
+    await grant_permission(db_session, higher_target, "plugin:review", level=150)
+
+    operator_token = await login(client, operator.username)
+
+    equal_response = await client.put(
+        f"/api/v1/admin/users/{equal_target.id}",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json={"is_active": False},
+    )
+    assert equal_response.status_code == 403
+
+    higher_response = await client.put(
+        f"/api/v1/admin/users/{higher_target.id}",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json={"is_active": False},
+    )
+    assert higher_response.status_code == 403
+
+    super_response = await client.put(
+        f"/api/v1/admin/users/{super_target.id}",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json={"is_active": False},
+    )
+    assert super_response.status_code == 403
 
 
 async def test_delete_user_cleans_auth_records_but_blocks_business_data(

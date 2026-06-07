@@ -16,9 +16,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.core.database import Base, get_db
 from app.main import app
 from app.models import User
-from app.models.permission import Permission, PermissionGroup, permission_group_items, user_permission_groups
 from app.core.security import get_password_hash
 from app.core.time import utc_now
+from app.services.permission_service import PermissionService
 
 
 @pytest_asyncio.fixture()
@@ -80,43 +80,22 @@ async def create_test_user(
     return user
 
 
-async def grant_permission(db: AsyncSession, user: User, permission_code: str) -> None:
-    result = await db.execute(
-        select(Permission).where(Permission.code == permission_code)
-    )
-    permission = result.scalar_one_or_none()
-    if permission is None:
-        permission = Permission(
-            code=permission_code,
-            name=permission_code,
-            category=permission_code.split(":", 1)[0],
-            is_active=True,
-        )
-        db.add(permission)
-        await db.flush()
-
-    group = PermissionGroup(
+async def grant_permission(
+    db: AsyncSession,
+    user: User,
+    permission_code: str,
+    *,
+    level: int = 100,
+) -> None:
+    service = PermissionService()
+    await service.grant_permissions_system(
+        db,
+        user,
+        [permission_code],
+        level=level,
         code=f"test_{permission_code.replace(':', '_')}_{user.id}",
         name=f"test {permission_code}",
-        group_type="custom",
-        is_active=True,
-        is_system=False,
     )
-    db.add(group)
-    await db.flush()
-    await db.execute(
-        permission_group_items.insert().values(
-            group_id=group.id,
-            permission_id=permission.id,
-        )
-    )
-    await db.execute(
-        user_permission_groups.insert().values(
-            user_id=user.id,
-            group_id=group.id,
-        )
-    )
-    await db.commit()
 
 
 

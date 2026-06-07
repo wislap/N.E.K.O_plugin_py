@@ -22,7 +22,7 @@ export const adminModules: AdminModule[] = [
   },
   { key: "plugins", label: "插件管理", path: "/admin/plugins", permission: "plugin:manage" },
   { key: "users", label: "用户管理", path: "/admin/users", permission: "system:user" },
-  { key: "permissions", label: "权限管理", path: "/admin/permissions", permission: "system:permission" },
+  { key: "permissions", label: "权限管理", path: "/admin/permissions", permission: "system:role" },
   { key: "smtp", label: "SMTP设置", path: "/admin/smtp", permission: "system:smtp" },
   { key: "settings", label: "系统设置", path: "/admin/settings", permission: "system:settings" },
   { key: "logs", label: "日志查看", path: "/admin/logs", permission: "system:logs" },

@@ -18,7 +18,7 @@ router = APIRouter(prefix="/dashboard", tags=["admin-dashboard"])
 ADMIN_DASHBOARD_PERMISSIONS = [
     "plugin:review",
     "system:user",
-    "system:permission",
+    "system:role",
     "system:smtp",
     "system:settings",
     "system:logs",

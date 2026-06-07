@@ -41,7 +41,7 @@ export default function AdminDashboard() {
 
   const canReviewPlugins = canAccessAdminPermission(permissions, "plugin:review");
   const canManageUsers = canAccessAdminPermission(permissions, "system:user");
-  const canManagePermissions = canAccessAdminPermission(permissions, "system:permission");
+  const canManagePermissions = canAccessAdminPermission(permissions, "system:role");
   const canManageSmtp = canAccessAdminPermission(permissions, "system:smtp");
   const canManageSettings = canAccessAdminPermission(permissions, "system:settings");
   const canViewLogs = canAccessAdminPermission(permissions, "system:logs");
@@ -108,7 +108,7 @@ export default function AdminDashboard() {
     {
       title: adminModuleByKey.permissions.label,
       href: adminModuleByKey.permissions.path,
-      value: "角色与权限组",
+      value: "角色与权限",
       icon: Shield,
       color: "text-primary",
       visible: canManagePermissions

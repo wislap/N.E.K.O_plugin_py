@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
-from app.core.database import engine, Base, AsyncSessionLocal
+from app.core.database import engine, AsyncSessionLocal, ensure_development_schema
 from app.errors.version_errors import VersionDomainError, ERROR_CODE_TO_HTTP
 from app.routers import (
     auth,
@@ -39,8 +39,7 @@ from app.services.permission_service import PermissionService
 async def lifespan(app: FastAPI):
     # 开发环境可自动补表；生产环境应通过 Alembic 管理数据库结构。
     if settings.ENVIRONMENT == "development" and settings.DEV_AUTO_CREATE_TABLES:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        await ensure_development_schema()
 
     async with AsyncSessionLocal() as db:
         await BootstrapService.ensure_initial_admin(db)

@@ -1,3 +1,12 @@
+export interface RoleSummary {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  level: number;
+  is_system?: boolean;
+}
+
 export interface User {
   id: number;
   username: string;
@@ -11,6 +20,8 @@ export interface User {
   is_email_verified: boolean;
   created_at: string;
   updated_at?: string;
+  level?: number;
+  roles?: RoleSummary[];
 }
 
 export interface LatestVersion {
@@ -91,6 +102,20 @@ export interface Role {
   permissions: string[];
   user_count: number;
   is_system?: boolean;
+  is_active?: boolean;
+  level: number;
+  group_type?: string | null;
+}
+
+export interface Permission {
+  id: number;
+  code: string;
+  name: string;
+  category: string;
+  description?: string | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface DashboardStats {

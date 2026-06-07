@@ -1,8 +1,17 @@
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.permission import (
+    Permission,
+    PermissionAuditLog,
+    PermissionGroup,
+    permission_group_items,
+    user_permission_groups,
+)
 from app.models.plugin import Plugin, PluginStatus
+from app.services.permission_service import PermissionService
 from tests.conftest import create_test_user, grant_permission
 
 
@@ -226,7 +235,7 @@ async def test_permission_admin_mutations_require_admin(
     assert groups_response.json()[0]["permissions"][0]["code"] == "plugin:test"
 
 
-async def test_permission_management_permission_allows_non_admin_operator(
+async def test_role_management_permission_allows_non_admin_operator_but_not_permission_definition(
     client: AsyncClient,
     db_session: AsyncSession,
 ):
@@ -245,7 +254,9 @@ async def test_permission_management_permission_allows_non_admin_operator(
         "permission_plain",
         "permission-plain@example.com",
     )
-    await grant_permission(db_session, operator, "system:permission")
+    await grant_permission(db_session, operator, "system:role")
+    await PermissionService().ensure_permission_system(db_session, "plugin:review")
+    await db_session.commit()
 
     operator_token = await login(client, operator.username)
     plain_token = await login(client, "permission_plain")
@@ -268,7 +279,7 @@ async def test_permission_management_permission_allows_non_admin_operator(
         headers={"Authorization": f"Bearer {operator_token}"},
         json=permission_payload,
     )
-    assert operator_create.status_code == 200
+    assert operator_create.status_code == 403
 
     group_response = await client.post(
         "/api/v1/admin/permissions/groups/create",
@@ -276,7 +287,7 @@ async def test_permission_management_permission_allows_non_admin_operator(
         json={
             "code": "operator_reviewers",
             "name": "操作员审核组",
-            "permission_codes": ["plugin:operator_test"],
+            "permission_codes": ["plugin:review"],
         },
     )
     assert group_response.status_code == 200
@@ -289,6 +300,180 @@ async def test_permission_management_permission_allows_non_admin_operator(
     )
     assert assign_response.status_code == 200
     assert assign_response.json()["user"] == member.username
+
+
+async def test_legacy_system_permission_no_longer_grants_role_management(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    operator = await create_test_user(
+        db_session,
+        "legacy_permission_operator",
+        "legacy-permission-operator@example.com",
+    )
+    legacy_permission = Permission(
+        code="system:permission",
+        name="旧权限管理",
+        category="system",
+        is_active=True,
+    )
+    legacy_role = PermissionGroup(
+        code="legacy_permission_managers",
+        name="旧权限管理员",
+        level=100,
+        is_active=True,
+        is_system=False,
+    )
+    db_session.add_all([legacy_permission, legacy_role])
+    await db_session.flush()
+    await db_session.execute(
+        permission_group_items.insert().values(
+            group_id=legacy_role.id,
+            permission_id=legacy_permission.id,
+        )
+    )
+    await db_session.execute(
+        user_permission_groups.insert().values(
+            user_id=operator.id,
+            group_id=legacy_role.id,
+        )
+    )
+    await db_session.commit()
+
+    operator_token = await login(client, operator.username)
+
+    groups_response = await client.get(
+        "/api/v1/admin/permissions/groups",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+    assert groups_response.status_code == 403
+
+    me_response = await client.get(
+        "/api/v1/admin/permissions/users/me",
+        headers={"Authorization": f"Bearer {operator_token}"},
+    )
+    assert me_response.status_code == 200
+    assert "system:permission" not in me_response.json()["permissions"]
+
+
+async def test_permission_audit_log_uses_outer_transaction(
+    db_session: AsyncSession,
+):
+    admin = await create_test_user(
+        db_session,
+        "audit_admin",
+        "audit-admin@example.com",
+        is_admin=True,
+    )
+    service = PermissionService()
+
+    await service._log_action(
+        db_session,
+        "create",
+        "group",
+        1,
+        "rollback probe",
+        operator_id=admin.id,
+    )
+    await db_session.rollback()
+
+    result = await db_session.execute(select(PermissionAuditLog))
+    assert result.scalars().all() == []
+
+
+async def test_permission_management_level_bounds_role_operations(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    operator = await create_test_user(
+        db_session,
+        "role_level_operator",
+        "role-level-operator@example.com",
+    )
+    member = await create_test_user(
+        db_session,
+        "role_level_target",
+        "role-level-target@example.com",
+    )
+    admin = await create_test_user(
+        db_session,
+        "role_level_admin",
+        "role-level-admin@example.com",
+        is_admin=True,
+    )
+    await grant_permission(db_session, operator, "system:role", level=100)
+
+    operator_token = await login(client, operator.username)
+    admin_token = await login(client, admin.username)
+
+    low_role = await client.post(
+        "/api/v1/admin/permissions/groups/create",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json={
+            "code": "low_level_reviewers",
+            "name": "低等级审核员",
+            "level": 99,
+            "permission_codes": ["system:role"],
+        },
+    )
+    assert low_role.status_code == 200
+    assert low_role.json()["level"] == 99
+
+    reserved_role = await client.post(
+        "/api/v1/admin/permissions/groups/create",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json={
+            "code": "super_admin",
+            "name": "伪超管角色",
+            "level": 99,
+            "permission_codes": ["system:role"],
+        },
+    )
+    assert reserved_role.status_code == 400
+    assert "系统保留" in reserved_role.json()["detail"]
+
+    equal_role = await client.post(
+        "/api/v1/admin/permissions/groups/create",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json={
+            "code": "equal_level_reviewers",
+            "name": "同级审核员",
+            "level": 100,
+            "permission_codes": ["system:role"],
+        },
+    )
+    assert equal_role.status_code == 403
+
+    super_level_role = await client.post(
+        "/api/v1/admin/permissions/groups/create",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json={
+            "code": "fake_super_admin",
+            "name": "伪超管",
+            "level": 1000,
+            "permission_codes": ["system:role"],
+        },
+    )
+    assert super_level_role.status_code == 400
+
+    high_role = await client.post(
+        "/api/v1/admin/permissions/groups/create",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={
+            "code": "high_level_reviewers",
+            "name": "高等级审核员",
+            "level": 150,
+            "permission_codes": ["system:role"],
+        },
+    )
+    assert high_role.status_code == 200
+
+    assign_high_role = await client.post(
+        f"/api/v1/admin/permissions/users/{member.id}/assign",
+        headers={"Authorization": f"Bearer {operator_token}"},
+        json={"group_ids": [high_role.json()["id"]]},
+    )
+    assert assign_high_role.status_code == 403
 
 
 async def test_settings_and_logs_require_permissions(

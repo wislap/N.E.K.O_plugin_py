@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Shield,
-  UserCog,
-  Plus,
   Edit,
+  Plus,
+  Shield,
   Trash2,
+  UserCog,
   Users
 } from "lucide-react";
+import { useAdminSession } from "@/admin/session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -35,63 +36,93 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { adminApi } from "@/services/adminApi";
+import { adminApi, type Permission, type Role } from "@/services/adminApi";
 import { notifySuccess, reportError } from "@/lib/error-reporting";
+import { toast } from "sonner";
 
-interface Permission {
-  id: string;
+const CATEGORY_LABELS: Record<string, string> = {
+  system: "系统",
+  plugin: "插件",
+  ai: "AI"
+};
+
+type RoleForm = {
+  code: string;
   name: string;
   description: string;
-}
-
-interface Role {
-  id: number;
-  name: string;
-  description: string;
+  level: number;
+  is_active: boolean;
   permissions: string[];
-  user_count: number;
-  is_system?: boolean;
-}
+};
 
-const AVAILABLE_PERMISSIONS: Permission[] = [
-  { id: "plugin:review", name: "插件审核", description: "审核插件提交" },
-  { id: "plugin:manage", name: "插件管理", description: "管理所有插件" },
-  { id: "system:user", name: "用户管理", description: "管理用户账户" },
-  { id: "system:settings", name: "系统设置", description: "修改系统配置" },
-  { id: "system:logs", name: "日志查看", description: "查看系统日志" },
-  { id: "system:smtp", name: "SMTP设置", description: "配置邮件服务" },
-  { id: "system:permission", name: "权限管理", description: "管理权限组和授权" }
-];
+function permissionLabel(permission: Permission) {
+  return permission.name || permission.code;
+}
 
 export default function AdminPermissions() {
+  const { permissions: sessionPermissions } = useAdminSession();
   const [roles, setRoles] = useState<Role[]>([]);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<RoleForm>({
+    code: "",
     name: "",
     description: "",
-    permissions: [] as string[]
+    level: 10,
+    is_active: true,
+    permissions: []
   });
 
+  const currentLevel = sessionPermissions?.level ?? 0;
+  const isSuperAdmin = Boolean(sessionPermissions?.is_super_admin || sessionPermissions?.is_admin);
+  const maxEditableLevel = isSuperAdmin ? 999 : Math.max(0, currentLevel - 1);
+
+  const permissionByCode = useMemo(() => {
+    return new Map(permissions.map((permission) => [permission.code, permission]));
+  }, [permissions]);
+
+  const groupedPermissions = useMemo(() => {
+    return permissions.reduce<Record<string, Permission[]>>((groups, permission) => {
+      const category = permission.category || "other";
+      groups[category] = groups[category] ?? [];
+      groups[category].push(permission);
+      return groups;
+    }, {});
+  }, [permissions]);
+
   useEffect(() => {
-    fetchRoles();
+    fetchAccessData();
   }, []);
 
-  const fetchRoles = async () => {
+  const canManageRole = (role: Role) => {
+    if (role.is_system) return false;
+    if (isSuperAdmin) return true;
+    return role.level < currentLevel;
+  };
+
+  const fetchAccessData = async () => {
     try {
       setIsLoading(true);
-      const data = await adminApi.getRoles();
-      setRoles(data);
+      const [roleData, permissionData] = await Promise.all([
+        adminApi.getRoles(),
+        adminApi.getPermissions()
+      ]);
+      setRoles(roleData);
+      setPermissions(permissionData);
     } catch (error) {
       reportError(error, {
-        title: "获取权限组失败",
-        userMessage: "无法加载权限组列表，请检查权限。",
-        context: { module: "admin.permissions", action: "fetchRoles" }
+        title: "获取角色失败",
+        userMessage: "无法加载角色列表，请检查权限。",
+        context: { module: "admin.permissions", action: "fetchAccessData" }
       });
       setRoles([]);
+      setPermissions([]);
     } finally {
       setIsLoading(false);
     }
@@ -100,54 +131,78 @@ export default function AdminPermissions() {
   const handleCreate = () => {
     setSelectedRole(null);
     setEditForm({
+      code: "",
       name: "",
       description: "",
+      level: Math.min(10, maxEditableLevel || 10),
+      is_active: true,
       permissions: []
     });
     setIsEditOpen(true);
   };
 
   const handleEdit = (role: Role) => {
+    if (!canManageRole(role)) return;
     setSelectedRole(role);
     setEditForm({
+      code: role.code ?? "",
       name: role.name,
       description: role.description,
+      level: role.level,
+      is_active: role.is_active ?? true,
       permissions: role.permissions
     });
     setIsEditOpen(true);
   };
 
   const handleSave = async () => {
-    try {
-      if (selectedRole) {
-        await adminApi.updateRole(selectedRole.id, editForm);
-      } else {
-        await adminApi.createRole(editForm);
-      }
-      fetchRoles();
-      setIsEditOpen(false);
-    } catch (error) {
-      reportError(error, {
-        title: "保存权限组失败",
-        userMessage: "权限组保存失败，请检查权限配置。",
-        context: { module: "admin.permissions", action: "saveRole", roleId: selectedRole?.id }
-      });
+    const level = Number(editForm.level);
+    if (!editForm.name.trim()) {
+      toast.error("角色名称不能为空");
       return;
     }
-    notifySuccess(selectedRole ? "权限组已更新" : "权限组已创建");
+    if (!isSuperAdmin && level >= currentLevel) {
+      toast.error("角色等级必须低于当前用户等级");
+      return;
+    }
+
+    try {
+      const payload = {
+        code: editForm.code.trim() || undefined,
+        name: editForm.name.trim(),
+        description: editForm.description.trim(),
+        level,
+        is_active: editForm.is_active,
+        permissions: editForm.permissions
+      };
+      if (selectedRole) {
+        await adminApi.updateRole(selectedRole.id, payload);
+      } else {
+        await adminApi.createRole(payload);
+      }
+      await fetchAccessData();
+      setIsEditOpen(false);
+      notifySuccess(selectedRole ? "角色已更新" : "角色已创建");
+    } catch (error) {
+      reportError(error, {
+        title: "保存角色失败",
+        userMessage: "角色保存失败，请检查权限配置。",
+        context: { module: "admin.permissions", action: "saveRole", roleId: selectedRole?.id }
+      });
+    }
   };
 
   const handleDelete = async () => {
-    if (!selectedRole) return;
+    if (!selectedRole || !canManageRole(selectedRole)) return;
     try {
       await adminApi.deleteRole(selectedRole.id);
-      fetchRoles();
+      await fetchAccessData();
       setIsDeleteOpen(false);
-      notifySuccess("权限组已删除");
+      notifySuccess("角色已删除");
     } catch (error) {
       reportError(error, {
-        title: "删除权限组失败",
-        userMessage: "权限组删除失败，请检查权限或系统组状态。",
+        title: "删除角色失败",
+        userMessage: "角色删除失败，请检查权限或系统角色状态。",
         context: { module: "admin.permissions", action: "deleteRole", roleId: selectedRole.id }
       });
     }
@@ -162,39 +217,66 @@ export default function AdminPermissions() {
     }));
   };
 
+  const renderRolePermissions = (role: Role) => {
+    if (role.permissions.length === 0) {
+      return <span className="text-sm text-muted-foreground">无权限</span>;
+    }
+    const visiblePermissions = role.permissions.slice(0, 8);
+    return (
+      <>
+        {visiblePermissions.map((permissionCode: string) => {
+          const permission = permissionByCode.get(permissionCode);
+          return (
+            <Badge key={permissionCode} variant="outline" className="text-xs">
+              {permission ? permissionLabel(permission) : permissionCode}
+            </Badge>
+          );
+        })}
+        {role.permissions.length > visiblePermissions.length && (
+          <Badge variant="secondary" className="text-xs">
+            +{role.permissions.length - visiblePermissions.length}
+          </Badge>
+        )}
+      </>
+    );
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">权限管理</h2>
-          <p className="text-muted-foreground">管理角色和权限配置</p>
+          <h2 className="text-2xl font-bold">角色管理</h2>
+          <p className="text-muted-foreground">角色决定后台权限，等级决定管理边界</p>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="h-4 w-4 mr-2" />
-          新建角色
-        </Button>
+        {maxEditableLevel > 0 && (
+          <Button onClick={handleCreate}>
+            <Plus className="h-4 w-4 mr-2" />
+            新建角色
+          </Button>
+        )}
       </div>
 
-      {/* 角色列表 */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {isLoading ? (
           <div className="col-span-full text-center py-8">加载中...</div>
+        ) : roles.length === 0 ? (
+          <div className="col-span-full text-center py-8 text-muted-foreground">暂无角色</div>
         ) : (
           roles.map((role) => (
             <Card key={role.id}>
               <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="h-10 w-10 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center">
                       <UserCog className="h-5 w-5 text-primary" />
                     </div>
-                    <div>
-                      <CardTitle className="text-lg">{role.name}</CardTitle>
-                      <CardDescription>{role.description}</CardDescription>
+                    <div className="min-w-0">
+                      <CardTitle className="truncate text-lg">{role.name}</CardTitle>
+                      <CardDescription className="truncate">{role.code}</CardDescription>
                     </div>
                   </div>
-                  <div className="flex gap-1">
-                    {!role.is_system && (
+                  <div className="flex shrink-0 gap-1">
+                    {canManageRole(role) && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -203,7 +285,7 @@ export default function AdminPermissions() {
                         <Edit className="h-4 w-4" />
                       </Button>
                     )}
-                    {!role.is_system && (
+                    {canManageRole(role) && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -219,38 +301,19 @@ export default function AdminPermissions() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Users className="h-4 w-4" />
-                  {role.user_count} 个用户
-                  {role.is_system && (
-                    <Badge variant="outline" className="ml-auto text-xs">
-                      系统内置
-                    </Badge>
-                  )}
+                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  <Badge variant="outline">等级 {role.level}</Badge>
+                  <span className="inline-flex items-center gap-1">
+                    <Users className="h-4 w-4" />
+                    {role.user_count} 个用户
+                  </span>
+                  {role.is_system && <Badge variant="secondary">系统内置</Badge>}
+                  {role.is_active === false && <Badge variant="destructive">停用</Badge>}
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">权限</Label>
                   <div className="flex flex-wrap gap-1">
-                    {role.permissions.length === 0 ? (
-                      <span className="text-sm text-muted-foreground">
-                        无权限
-                      </span>
-                    ) : (
-                      role.permissions.map((permId) => {
-                        const perm = AVAILABLE_PERMISSIONS.find(
-                          (p) => p.id === permId
-                        );
-                        return perm ? (
-                          <Badge
-                            key={permId}
-                            variant="outline"
-                            className="text-xs"
-                          >
-                            {perm.name}
-                          </Badge>
-                        ) : null;
-                      })
-                    )}
+                    {renderRolePermissions(role)}
                   </div>
                 </div>
               </CardContent>
@@ -259,28 +322,31 @@ export default function AdminPermissions() {
         )}
       </div>
 
-      {/* 权限说明 */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Shield className="h-5 w-5" />
-            权限说明
+            权限清单
           </CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>权限名称</TableHead>
-                <TableHead>说明</TableHead>
+                <TableHead>权限</TableHead>
+                <TableHead>分类</TableHead>
+                <TableHead>代码</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {AVAILABLE_PERMISSIONS.map((perm) => (
-                <TableRow key={perm.id}>
-                  <TableCell className="font-medium">{perm.name}</TableCell>
+              {permissions.map((permission) => (
+                <TableRow key={permission.code}>
+                  <TableCell className="font-medium">{permissionLabel(permission)}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {perm.description}
+                    {CATEGORY_LABELS[permission.category] ?? permission.category}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {permission.code}
                   </TableCell>
                 </TableRow>
               ))}
@@ -289,75 +355,109 @@ export default function AdminPermissions() {
         </CardContent>
       </Card>
 
-      {/* 编辑对话框 */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>
-              {selectedRole ? "编辑角色" : "新建角色"}
-            </DialogTitle>
-            <DialogDescription>
-              配置角色信息和权限
-            </DialogDescription>
+            <DialogTitle>{selectedRole ? "编辑角色" : "新建角色"}</DialogTitle>
+            <DialogDescription>配置角色、等级和权限</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-[1fr_160px]">
             <div className="space-y-2">
               <Label>角色名称</Label>
               <Input
                 value={editForm.name}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, name: e.target.value })
-                }
-                placeholder="输入角色名称"
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                placeholder="审核员"
               />
             </div>
             <div className="space-y-2">
+              <Label>等级</Label>
+              <Input
+                type="number"
+                min={0}
+                max={isSuperAdmin ? 999 : maxEditableLevel}
+                value={editForm.level}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, level: Number(e.target.value) })
+                }
+              />
+            </div>
+            {!selectedRole && (
+              <div className="space-y-2 md:col-span-2">
+                <Label>角色代码</Label>
+                <Input
+                  value={editForm.code}
+                  onChange={(e) => setEditForm({ ...editForm, code: e.target.value })}
+                  placeholder="reviewer"
+                />
+              </div>
+            )}
+            <div className="space-y-2 md:col-span-2">
               <Label>描述</Label>
               <Textarea
                 value={editForm.description}
                 onChange={(e) =>
                   setEditForm({ ...editForm, description: e.target.value })
                 }
-                placeholder="输入角色描述"
                 rows={2}
               />
             </div>
-            <div className="space-y-2">
-              <Label>权限配置</Label>
-              <div className="border rounded-lg p-4 space-y-2">
-                {AVAILABLE_PERMISSIONS.map((perm) => (
-                  <div
-                    key={perm.id}
-                    className="flex items-start gap-3 p-2 hover:bg-muted rounded-lg cursor-pointer"
-                    onClick={() => togglePermission(perm.id)}
-                  >
-                    <Checkbox
-                      checked={editForm.permissions.includes(perm.id)}
-                      onCheckedChange={() => togglePermission(perm.id)}
-                    />
-                    <div className="flex-1">
-                      <div className="font-medium">{perm.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {perm.description}
+            {selectedRole && (
+              <div className="flex items-center justify-between md:col-span-2">
+                <Label>启用角色</Label>
+                <Switch
+                  checked={editForm.is_active}
+                  onCheckedChange={(checked) =>
+                    setEditForm({ ...editForm, is_active: checked })
+                  }
+                />
+              </div>
+            )}
+            <div className="space-y-2 md:col-span-2">
+              <Label>权限</Label>
+              <ScrollArea className="h-72 rounded-md border">
+                <div className="space-y-4 p-4">
+                  {Object.entries(groupedPermissions).map(([category, categoryPermissions]) => (
+                    <div key={category} className="space-y-2">
+                      <div className="text-sm font-medium">
+                        {CATEGORY_LABELS[category] ?? category}
+                      </div>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {categoryPermissions.map((permission) => (
+                          <label
+                            key={permission.code}
+                            className="flex items-start gap-3 rounded-md border p-3"
+                          >
+                            <Checkbox
+                              checked={editForm.permissions.includes(permission.code)}
+                              onCheckedChange={() => togglePermission(permission.code)}
+                            />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-medium">
+                                {permissionLabel(permission)}
+                              </span>
+                              <span className="block truncate font-mono text-xs text-muted-foreground">
+                                {permission.code}
+                              </span>
+                            </span>
+                          </label>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </ScrollArea>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditOpen(false)}>
               取消
             </Button>
-            <Button onClick={handleSave}>
-              {selectedRole ? "保存" : "创建"}
-            </Button>
+            <Button onClick={handleSave}>{selectedRole ? "保存" : "创建"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* 删除确认对话框 */}
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <DialogContent>
           <DialogHeader>
